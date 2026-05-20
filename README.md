@@ -3,27 +3,86 @@
 TagSLAM is a ROS2-based package for Simultaneous Localization and
 Mapping using Apriltag fiducial markers.
 
-ROS2 is WORK IN PROGRESS. Documentation will follow.
-
 ## Platforms supported
 
-At the moment TagSLAM requires ROS2 Rolling/Jazzy or newer.
-Older versions of ROS2 lack some important rosbag2 features.
+ROS2 Rolling / Jazzy or newer.
 
-## How to build
+## Quick Start (3-AprilTag Example)
 
-The build instructions follow the standard procedure for ROS2. Set the following shell variables:
+This repository includes a ready-to-use configuration for a 3-AprilTag
+setup under `my_config/`.
 
-```bash
-repo=tagslam
-url=https://github.com/berndpfrommer/${repo}.git
+### Tag Layout
+
+```
+Tag 1 (ID=1, 2cm)   Tag 0 (ID=0, 15cm)   Tag 2 (ID=2, 2cm)
+     ← left              center                right →
+   y = -0.4 m           y = 0.0             y = +0.4 m
 ```
 
-and follow the ROS2 build instructions
-[here](https://github.com/ros-misc-utilities/.github/blob/master/docs/build_ros_repository.md).
-However, you need to modify the instructions to compile the ``ros2`` branch.
+**Coordinate system** (origin at Tag 0 center):
+- **x**: perpendicular to wall, pointing toward camera
+- **y**: horizontal along wall, right is positive
+- **z**: vertical, up
 
-Make sure to source your workspace's ``install/setup.bash`` afterwards.
+### 1. Install Dependencies
+
+```bash
+sudo apt install -y \
+  ros-$(rosversion -d)-gtsam \
+  ros-$(rosversion -d)-apriltag-detector \
+  ros-$(rosversion -d)-apriltag-msgs \
+  ros-$(rosversion -d)-cv-bridge \
+  ros-$(rosversion -d)-image-transport \
+  ros-$(rosversion -d)-tf2 \
+  ros-$(rosversion -d)-tf2-msgs \
+  ros-$(rosversion -d)-rosbag2 \
+  libopencv-dev libboost-graph-dev libyaml-cpp-dev python3-opencv
+```
+
+### 2. Build
+
+```bash
+mkdir -p ~/tagslam_ws/src && cd ~/tagslam_ws/src
+git clone https://github.com/berndpfrommer/tagslam.git -b ros2
+git clone https://github.com/berndpfrommer/flex_sync.git -b master
+cd ~/tagslam_ws && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+source install/setup.bash
+```
+
+### 3. Edit Config
+
+Before running, update `my_config/cameras.yaml` with your actual camera
+parameters (intrinsics, distortion, resolution, image_topic).
+
+### 4. Run
+
+```bash
+# SLAM only
+bash my_config/run.sh
+
+# SLAM + real-time visualizer overlay (shows xyz on camera feed)
+bash my_config/run.sh visualize
+```
+
+The visualizer window shows the camera image with the current camera pose
+(X/Y/Z coordinates) overlaid in the top-left corner. Press `Q` or `Esc` to close.
+
+### Output Topics
+
+| Topic | Type | Description |
+|-------|------|-------------|
+| `/detector/tags` | `apriltag_msgs/...` | Detected tag corners |
+| `/tagslam/odom/body_rig` | `nav_msgs/Odometry` | Camera rig pose |
+| `/tf` | `tf2_msgs/TFMessage` | All transforms |
+
+### 5. Dump Results
+
+```bash
+ros2 service call /tagslam/dump std_srvs/srv/Trigger
+```
+
+Writes `camera_poses.yaml`, `poses.yaml`, `error_map.txt` to the current directory.
 
 
 ## How to use
