@@ -1,0 +1,128 @@
+# ═══════════════════════════════════════════════════════════════
+# 三 AprilTag 配置：贴在水平墙上，小-大-小排列
+#
+# 坐标系定义（World / Body 原点 = 大 Tag ID=0 的中心）：
+#   x 轴 — 垂直于墙面，指向摄像头方向（从墙向摄像头为正）
+#   y 轴 — 沿墙面水平方向，面向墙时向右为正
+#   z 轴 — 竖直向上
+#
+# Tag 布局（面向墙的视角）：
+#   [Tag 1: ID=1, 2cm]  [Tag 0: ID=0, 15cm]  [Tag 2: ID=2, 2cm]
+#        ← 左                中(原点)                右 →
+#      y = -0.4            y = 0.0               y = +0.4
+#
+# 旋转说明：rotation 使用轴角(Axis-Angle)表示法
+#   {x:0, y:1.5708, z:0} = 绕 y 轴旋转 90°(π/2)
+#   使 Tag 法线（Tag 局部 z）对齐到 World x（垂直于墙面向外）
+# ═══════════════════════════════════════════════════════════════
+
+tagslam_parameters:
+  optimizer_mode: slow               # slow = iSAM2增量 + 误差大时回退全优化
+  minimum_viewing_angle: 15.0        # 光轴与 tag 表面间最小角度(度)，小于此角度忽略
+  minimum_tag_area: 200              # 最小 tag 面积(像素²)，2cm 小 tag 需要调低此值
+  max_num_incremental_opt: 50        # 增量优化次数后触发一次全优化
+  pixel_noise: 1.0                   # 角点检测噪声(像素)
+  max_subgraph_error: 50.0           # 子图最大允许误差，超出的帧被丢弃
+  subgraph_abs_prior_position_noise: 0.1
+  subgraph_abs_prior_rotation_noise: 0.1
+  use_approximate_sync: false
+
+body_defaults:
+  position_noise: 0.05
+  rotation_noise: 0.01
+
+default_body: tag_map
+
+bodies:
+  - tag_map:                          # 静态 Body — 包含墙上3个 Tag
+      is_static: true                 # 静止不动
+      default_tag_size: 0.15          # 默认 tag 边长(米)
+      type: simple
+      pose:                           # Body 在世界坐标系中的位姿（原点即 Tag 0 中心）
+        position:
+          x: 0
+          y: 0
+          z: 0
+        rotation:
+          x: 0
+          y: 0
+          z: 0
+        position_noise:
+          x: 0.0001
+          y: 0.0001
+          z: 0.0001
+        rotation_noise:
+          x: 1.0e-05
+          y: 1.0e-05
+          z: 1.0e-05
+      tags:
+        # ── Tag 0：大 tag，15cm，原点 ──
+        - id: 0
+          size: 0.15
+          bits: 6
+          pose:
+            position:
+              x: 0.0
+              y: 0.0
+              z: 0.0
+            rotation:
+              x: 0
+              y: 1.5708            # 绕 y 轴转90°，Tag法线 → World x
+              z: 0
+            position_noise:
+              x: 0.0001
+              y: 0.0001
+              z: 0.0001
+            rotation_noise:
+              x: 1.0e-05
+              y: 1.0e-05
+              z: 1.0e-05
+
+        # ── Tag 1：小 tag，2cm，左侧（y = -0.4）──
+        - id: 1
+          size: 0.02
+          bits: 6
+          pose:
+            position:
+              x: 0.0
+              y: -0.4               # 左 40cm（面向墙时）
+              z: 0.0
+            rotation:
+              x: 0
+              y: 1.5708
+              z: 0
+            position_noise:
+              x: 0.0001
+              y: 0.0001
+              z: 0.0001
+            rotation_noise:
+              x: 1.0e-05
+              y: 1.0e-05
+              z: 1.0e-05
+
+        # ── Tag 2：小 tag，2cm，右侧（y = +0.4）──
+        - id: 2
+          size: 0.02
+          bits: 6
+          pose:
+            position:
+              x: 0.0
+              y: 0.4                # 右 40cm（面向墙时）
+              z: 0.0
+            rotation:
+              x: 0
+              y: 1.5708
+              z: 0
+            position_noise:
+              x: 0.0001
+              y: 0.0001
+              z: 0.0001
+            rotation_noise:
+              x: 1.0e-05
+              y: 1.0e-05
+              z: 1.0e-05
+
+  - rig:                              # 动态 Body — 摄像头挂在上面
+      is_static: false                # 会运动
+      type: simple
+      odom_frame_id: body_rig

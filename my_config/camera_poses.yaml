@@ -1,0 +1,21 @@
+# ── 摄像头外参（可选先验）──
+# 设置为 (0,0,0) + 大方差 → 完全交给 SLAM 估计
+# 如果你知道摄像头在 rig 上的大致位置，可填入实际值并缩小 noise
+cam0:
+  pose:
+    position:
+      x: 0
+      y: 0
+      z: 0
+    rotation:
+      x: 0
+      y: 0
+      z: 0
+    position_noise:
+      x: 1.0    # 大方差 = 弱先验，SLAM 自由估计
+      y: 1.0
+      z: 1.0
+    rotation_noise:
+      x: 1.0
+      y: 1.0
+      z: 1.0
