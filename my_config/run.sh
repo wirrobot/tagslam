@@ -68,7 +68,7 @@ echo ""
 echo "All nodes running. Press Ctrl+C to stop."
 echo "  Topics:"
 echo "    /detector/tags          — 检测到的 Tag"
-echo "    /tagslam/odom/body_rig  — 摄像头位姿"
+echo "    /odom/body_rig          — 摄像头位姿"
 echo ""
 
 wait

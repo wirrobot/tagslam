@@ -23,7 +23,7 @@ class Visualizer(Node):
             Image, "camera/image_raw", self.image_callback, 10
         )
         self.odom_sub = self.create_subscription(
-            Odometry, "/tagslam/odom/body_rig", self.odom_callback, 10
+            Odometry, "/odom/body_rig", self.odom_callback, 10
         )
 
         self.timer = self.create_timer(0.033, self.render)  # ~30 fps

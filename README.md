@@ -125,7 +125,7 @@ Press `Ctrl+C` to stop all nodes. In the visualizer window, press `Q` or `Esc` t
 |-------|------|-------------|
 | `camera/image_raw` | `sensor_msgs/Image` | Camera feed (published by camera_pub.py) |
 | `/detector/tags` | `apriltag_msgs/AprilTagDetectionArray` | Detected tag corners |
-| `/tagslam/odom/body_rig` | `nav_msgs/Odometry` | Camera rig pose (appears after first tag is seen) |
+| `/odom/body_rig` | `nav_msgs/Odometry` | Camera rig pose (appears after first tag is seen) |
 | `/tf` | `tf2_msgs/TFMessage` | All transforms (world→rig→cam, rig→tag) |
 
 The visualizer (`my_config/visualizer.py`) overlays the camera's current
