@@ -5,11 +5,15 @@ Mapping using Apriltag fiducial markers.
 
 ## Platforms supported
 
-ROS2 Rolling / Jazzy or newer.
+ROS2 Humble / Jazzy / Rolling.
+
+> **Note for Humble**: the `ros2` branch has been patched to work with
+> Humble (bag-level compatibility fixes). If building against a newer
+> ROS2 distro, the original upstream code can be used without patches.
 
 ## Quick Start (3-AprilTag Example)
 
-This repository includes a ready-to-use configuration for a 3-AprilTag
+This repository includes a ready-to-use configuration for a **3-AprilTag**
 setup under `my_config/`.
 
 ### Tag Layout
@@ -25,134 +29,206 @@ Tag 1 (ID=1, 2cm)   Tag 0 (ID=0, 15cm)   Tag 2 (ID=2, 2cm)
 - **y**: horizontal along wall, right is positive
 - **z**: vertical, up
 
+---
+
 ### 1. Install Dependencies
 
 ```bash
 sudo apt install -y \
   ros-$(rosversion -d)-gtsam \
-  ros-$(rosversion -d)-apriltag-detector \
   ros-$(rosversion -d)-apriltag-msgs \
+  ros-$(rosversion -d)-apriltag-detector \
+  ros-$(rosversion -d)-apriltag-detector-umich \
   ros-$(rosversion -d)-cv-bridge \
   ros-$(rosversion -d)-image-transport \
-  ros-$(rosversion -d)-tf2 \
-  ros-$(rosversion -d)-tf2-msgs \
+  ros-$(rosversion -d)-tf2 ros-$(rosversion -d)-tf2-msgs \
+  ros-$(rosversion -d)-nav-msgs \
   ros-$(rosversion -d)-rosbag2 \
-  libopencv-dev libboost-graph-dev libyaml-cpp-dev python3-opencv
+  libopencv-dev libboost-graph-dev libyaml-cpp-dev
 ```
+
+Also fix a NumPy version conflict (ROS2 Humble requires NumPy 1.x):
+
+```bash
+pip3 install "numpy<2" "opencv-python<4.10"
+```
+
+---
 
 ### 2. Build
 
 ```bash
-mkdir -p ~/tagslam_ws/src && cd ~/tagslam_ws/src
-git clone https://github.com/berndpfrommer/tagslam.git -b ros2
-git clone https://github.com/berndpfrommer/flex_sync.git -b master
-cd ~/tagslam_ws && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+git clone https://github.com/waliwuao/tagslam.git
+cd tagslam
+
+# Clone flex_sync dependency alongside tagslam
+git clone https://github.com/berndpfrommer/flex_sync.git -b master flex_sync
+
+# Build both packages (disable tests to avoid optional linter deps)
+source /opt/ros/$ROS_DISTRO/setup.bash
+colcon build --symlink-install \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+  --base-paths . flex_sync
+
+# Source the overlay
 source install/setup.bash
 ```
 
-### 3. Edit Config
+---
 
-Before running, update `my_config/cameras.yaml` with your actual camera
-parameters (intrinsics, distortion, resolution, image_topic).
+### 3. Configure Your Camera
 
-### 4. Run
+Edit `my_config/cameras.yaml` — update these fields to match your hardware:
+
+```yaml
+cam0:
+  intrinsics: [fx, fy, cx, cy]           # from camera calibration
+  distortion_coeffs: [k1, k2, p1, p2, k3]  # or 4 coeffs for equidistant
+  resolution: [width, height]
+  image_topic: camera/image_raw            # your camera's ROS topic
+```
+
+If you don't have a ROS2 camera driver (e.g. using a phone camera via
+Iriun/DroidCam), a built-in camera publisher is provided:
 
 ```bash
-# SLAM only
+python3 my_config/camera_pub.py &
+```
+
+---
+
+### 4. One-Click Run
+
+After building and configuring, start everything with a single command:
+
+```bash
+# Run SLAM only (background)
 bash my_config/run.sh
 
-# SLAM + real-time visualizer overlay (shows xyz on camera feed)
+# Run SLAM + live visualizer overlay (shows camera XYZ on image)
 bash my_config/run.sh visualize
 ```
 
-The visualizer window shows the camera image with the current camera pose
-(X/Y/Z coordinates) overlaid in the top-left corner. Press `Q` or `Esc` to close.
+`run.sh` automatically:
+1. Sources the workspace
+2. Launches `sync_and_detect` (tag detection)
+3. Launches `tagslam` (SLAM optimization)
+4. Optionally launches `visualizer.py` (real-time debug overlay)
 
-### Output Topics
+Press `Ctrl+C` to stop all nodes. In the visualizer window, press `Q` or `Esc` to close.
+
+---
+
+### 5. Output Topics & Visualization
 
 | Topic | Type | Description |
 |-------|------|-------------|
-| `/detector/tags` | `apriltag_msgs/...` | Detected tag corners |
-| `/tagslam/odom/body_rig` | `nav_msgs/Odometry` | Camera rig pose |
-| `/tf` | `tf2_msgs/TFMessage` | All transforms |
+| `camera/image_raw` | `sensor_msgs/Image` | Camera feed (published by camera_pub.py) |
+| `/detector/tags` | `apriltag_msgs/AprilTagDetectionArray` | Detected tag corners |
+| `/tagslam/odom/body_rig` | `nav_msgs/Odometry` | Camera rig pose (appears after first tag is seen) |
+| `/tf` | `tf2_msgs/TFMessage` | All transforms (world→rig→cam, rig→tag) |
 
-### 5. Dump Results
+The visualizer (`my_config/visualizer.py`) overlays the camera's current
+X/Y/Z position on the live camera feed (top-left panel).
+
+---
+
+### 6. Dump Final Results
 
 ```bash
 ros2 service call /tagslam/dump std_srvs/srv/Trigger
 ```
 
-Writes `camera_poses.yaml`, `poses.yaml`, `error_map.txt` to the current directory.
+Writes `camera_poses.yaml`, `poses.yaml`, `error_map.txt`, `tag_corners.txt`
+to the current directory.
 
+---
 
-## How to use
+### Files in `my_config/`
 
+| File | Purpose |
+|------|---------|
+| `cameras.yaml` | Camera intrinsics, distortion, topic names |
+| `camera_poses.yaml` | Camera-to-rig extrinsic prior (optional) |
+| `tagslam.yaml` | Tag layout, body definitions, SLAM parameters |
+| `run.sh` | One-click launch (sync_and_detect + tagslam + visualizer) |
+| `visualizer.py` | Live debug window: camera feed + XYZ overlay |
+| `camera_pub.py` | Simple OpenCV-based camera publisher (phone/webcam) |
 
-### Sync and detect
+---
 
-TagSLAM operates off of tags (and odometry messages, if provided). In a scenerio with multiple cameras or odometry it is important
-that all sensors are synchronized, meaning that the sensor data has matching ROS header.stamp fields.
-Sync_and_detect runs the apriltag detector across multiple cameras and emits synchronized messages with the decoded tags.
-These messages in turn are used by TagSLAM. Note that ``sync_and_detect`` can also deal with odometry:
-it drops all odometry messages except for the ones that coincide (approximately) with the camera images, and alters the header.stamp
-field to match exactly the ones of the image messages.
+## How to use (manual / advanced)
 
-You can run ``sync_and_detect`` either from a bag file, and write the
-detected tags into another bag, or you can run it as a stand-alone (composable) node.
-It will use the ``cameras.yaml`` file to determine what topics to read from the input bag, what image transport (raw vs compressed), what tag detector
-(MIT vs UMich), and what output tag topics to use. The ``tagslam.yaml`` file is searched for bodies with odometry topics.
+For users who need fine-grained control, the two ROS2 nodes can also
+be launched independently.
 
+### Sync and detect (tag detection only)
 
-Here is how to run it from a bag:
-```
-ros2 run tagslam sync_and_detect_from_bag --ros-args -p "cameras:=./cameras.yaml" -p "tagslam_config:=./tagslam.yaml" -p "in_bag:=name_of_input_bag" -p "out_bag:=./tag_bag"
-```
-
-For online operation, launch a ``sync_and_detect`` node like this:
-```
-ros2 launch tagslam sync_and_detect.launch.py use_sim_time:=<True/False> cameras:=<path_to_cameras.yaml_file> tagslam_config:=<path_to_tagslam_config_file> use_approximate_sync:=<True/False>
-```
-
-### TagSLAM
-
-TagSLAM can run off a rosbag, or as a node. When running off a bag, TagSLAM will automatically recognize when there are only
-image topics, but no tag topics in the rosbag, and will start ``sync_and_detect`` to do tag detection.
-
-Run TagSLAM from a rosbag like this:
-```
-ros2 run tagslam tagslam_from_bag --ros-args -p "cameras:=./cameras.yaml" -p "tagslam_config:=./tagslam.yaml" -p "camera_poses:=./camera_poses.yaml" -p "in_bag:=./bag_with_tags_and_odom" -p "out_bag:=./out_bag"
+```bash
+ros2 launch tagslam sync_and_detect.launch.py \
+  cameras:=./cameras.yaml \
+  tagslam_config:=./tagslam.yaml
 ```
 
-For online operation, launch a ``tagslam`` node like this:
-```
-ros2 launch tagslam tagslam.launch.py use_sim_time:=<True/False> cameras:=<path_to_cameras.yaml_file> camera_poses:=<path_to_camera_poses.yaml file> tagslam_config:=<path_to_tagslam_config_file> use_approximate_sync:=<True/False>
+### TagSLAM (optimization only)
+
+```bash
+ros2 launch tagslam tagslam.launch.py \
+  cameras:=./cameras.yaml \
+  camera_poses:=./camera_poses.yaml \
+  tagslam_config:=./tagslam.yaml
 ```
 
-### Rosbag
+### Running from a rosbag
 
-When playing from a ros2 bag it's important to pass ``use_sim_time:=True`` to all launch scripts, and to let the ros2 bag player drive the clock:
+```bash
+# Detect tags from bag
+ros2 run tagslam sync_and_detect_from_bag --ros-args \
+  -p cameras:=./cameras.yaml \
+  -p tagslam_config:=./tagslam.yaml \
+  -p in_bag:=./input_bag \
+  -p out_bag:=./tag_bag
+
+# Run SLAM from tag bag
+ros2 run tagslam tagslam_from_bag --ros-args \
+  -p cameras:=./cameras.yaml \
+  -p tagslam_config:=./tagslam.yaml \
+  -p camera_poses:=./camera_poses.yaml \
+  -p in_bag:=./tag_bag
 ```
+
+Always pass `use_sim_time:=True` when playing bags:
+
+```bash
 ros2 bag play --clock-topics-all my_bag/
 ```
 
+---
+
 ## Trouble Shooting
 
-### Nothing happens
+### Nothing happens / no tags detected
 
-- Check that the topics match. ``ros2 node info`` is your friend.
-- If you have multiple cameras running, check that they are synchronized, i.e. that the ``header.stamp`` time stamps match between cameras. If they don't match, use an pproximate synchronizer.
-- Is ``use_sim_time`` set consistently across all nodes?
+- Verify the camera is actually pointed at the AprilTags.
+- Check topic flow: `ros2 topic hz /detector/tags`
+- Ensure `use_sim_time` is consistent across all nodes (False for live, True for bags).
+
+### No pose published on `/tagslam/odom/body_rig`
+
+- Tagslam only starts publishing after the **first tag** is observed.
+  Point the camera at a tag and wait 1–2 seconds.
 
 ### Jerky motions
-- Check for image quality and that the tag detector works as it should. Use the apriltag_detector and in particular ``apriltag_draw`` from [this repo](https://github.com/ros-misc-utilities/apriltag_detector), which is available as installable apt package under ROS2.
 
-### Large reprojection errors and SUBGRAPH ERROR warnings
+- Check image quality. Use `apriltag_draw` from the
+  [apriltag_detector](https://github.com/ros-misc-utilities/apriltag_detector) repo.
 
-- poor image quality
-- bad calibration file
-- bad camera pose file
-- wrong tag size
-- wrong tag pose specified
+### Large reprojection errors / SUBGRAPH ERROR warnings
+
+- Poor image quality
+- Wrong camera calibration (intrinsics / distortion)
+- Wrong tag size in `tagslam.yaml`
+- Wrong tag pose specified
 
 
 ## License
