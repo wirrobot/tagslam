@@ -1,0 +1,9 @@
+build/
+install/
+log/
+flex_sync/
+out.bag/
+tag_bag/
+tag_corners.txt
+*.pyc
+__pycache__/

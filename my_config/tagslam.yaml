@@ -22,7 +22,9 @@ tagslam_parameters:
   minimum_tag_area: 200              # 最小 tag 面积(像素²)，2cm 小 tag 需要调低此值
   max_num_incremental_opt: 50        # 增量优化次数后触发一次全优化
   pixel_noise: 1.0                   # 角点检测噪声(像素)
-  max_subgraph_error: 50.0           # 子图最大允许误差，超出的帧被丢弃
+  max_subgraph_error: 500.0          # 子图最大允许误差（调大以适应不完美的 Homography）
+  ambiguity_angle_threshold: 40.0   # 位姿二义性检查的角度阈值(度)，低于此角度才检查 flip risk
+  max_ambiguity_ratio: 0.5          # 最大允许的二义性比率（默认0.3，调大以容忍更大的位姿不确定性）
   subgraph_abs_prior_position_noise: 0.1
   subgraph_abs_prior_rotation_noise: 0.1
   use_approximate_sync: false
