@@ -8,13 +8,16 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_DIR="$SCRIPT_DIR"
-WS_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+WS_DIR="$(dirname "$SCRIPT_DIR")"
 
 # 自动查找 ROS2 环境
+# Always source base ROS2 first, then the workspace overlay on top
+source /opt/ros/humble/setup.bash 2>/dev/null \
+  || source /opt/ros/jazzy/setup.bash 2>/dev/null \
+  || source /opt/ros/rolling/setup.bash 2>/dev/null
+
 if [ -f "$WS_DIR/install/setup.bash" ]; then
     source "$WS_DIR/install/setup.bash"
-elif [ -f "/opt/ros/$ROS_DISTRO/setup.bash" ]; then
-    source "/opt/ros/$ROS_DISTRO/setup.bash"
 fi
 
 echo "═══════════════════════════════════════"
