@@ -28,14 +28,19 @@ echo "════════════════════════�
 cleanup() {
     echo ""
     echo "Shutting down..."
-    kill %1 %2 2>/dev/null
+    jobs -p | xargs -r kill 2>/dev/null
     wait 2>/dev/null
     exit 0
 }
 trap cleanup SIGINT SIGTERM
 
+# ── 启动摄像头发布节点 ──
+echo "[1/4] Starting camera publisher..."
+python3 "$CONFIG_DIR/camera_pub.py" &
+sleep 1
+
 # ── 启动 sync_and_detect（Tag 检测）──
-echo "[1/2] Starting sync_and_detect..."
+echo "[2/4] Starting sync_and_detect..."
 ros2 launch tagslam sync_and_detect.launch.py \
     cameras:="$CONFIG_DIR/cameras.yaml" \
     tagslam_config:="$CONFIG_DIR/tagslam.yaml" \
@@ -44,7 +49,7 @@ ros2 launch tagslam sync_and_detect.launch.py \
 sleep 2
 
 # ── 启动 tagslam（SLAM 优化）──
-echo "[2/2] Starting tagslam..."
+echo "[3/4] Starting tagslam..."
 ros2 launch tagslam tagslam.launch.py \
     cameras:="$CONFIG_DIR/cameras.yaml" \
     camera_poses:="$CONFIG_DIR/camera_poses.yaml" \
@@ -55,7 +60,7 @@ sleep 2
 
 # ── 可选：启动可视化 ──
 if [ "${1:-}" = "visualize" ]; then
-    echo "[3/3] Starting visualizer..."
+    echo "[4/4] Starting visualizer..."
     python3 "$CONFIG_DIR/visualizer.py" &
 fi
 
