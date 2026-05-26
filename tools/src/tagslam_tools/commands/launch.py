@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import logging
 import os
-import signal
 import subprocess
 import sys
-import time
 from pathlib import Path
 from typing import Annotated
 
@@ -116,24 +114,14 @@ def _launch_all(viz: bool = False) -> None:
     section()
     console.print("  Press Ctrl+C to stop all nodes.", style="dim")
 
-    _shutdown = False
-
-    def _on_signal(sig: int, frame: object) -> None:
-        nonlocal _shutdown
-        _shutdown = True
-
-    prev_sigint = signal.signal(signal.SIGINT, _on_signal)
-    prev_sigterm = signal.signal(signal.SIGTERM, _on_signal)
-
     try:
-        while not _shutdown:
-            time.sleep(0.5)
+        while True:
+            pass
+    except KeyboardInterrupt:
+        pass
     finally:
-        signal.signal(signal.SIGINT, prev_sigint)
-        signal.signal(signal.SIGTERM, prev_sigterm)
         for p in procs:
             p.terminate()
-        time.sleep(0.5)
         for p in procs:
             try:
                 p.wait(timeout=3)

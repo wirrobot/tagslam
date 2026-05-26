@@ -18,8 +18,8 @@ def run_visualizer(
 ) -> None:
     """Launch a window displaying the camera feed with overlaid pose coordinates.
 
-    Pose data is auto-saved to *pose_log* on each update and on exit.
-    Press Q / Esc to quit and save the final pose.
+    Press SPACE to save current pose to *pose_log* (one line per entry).
+    Press Q / Esc to quit.
 
     Requires ROS2 environment sourced.
     """
@@ -30,16 +30,11 @@ def run_visualizer(
     from sensor_msgs.msg import Image
 
     _log_file = open(pose_log, "a")  # noqa: SIM115
-    _last_saved_ts = 0.0
 
-    def _save_pose(pose, force: bool = False) -> None:
-        nonlocal _last_saved_ts
-        ts = time.time()
-        if not force and ts - _last_saved_ts < 0.5:
-            return
-        _last_saved_ts = ts
+    def _save_pose(pose) -> None:
         p = pose.position
         o = pose.orientation
+        ts = time.time()
         line = (
             f"{ts:.6f} "
             f"x={p.x:.6f} y={p.y:.6f} z={p.z:.6f} "
@@ -47,6 +42,7 @@ def run_visualizer(
         )
         _log_file.write(line)
         _log_file.flush()
+        logger.info("Pose saved to %s: x=%.3f y=%.3f z=%.3f", pose_log, p.x, p.y, p.z)
 
     class Visualizer(Node):
         def __init__(self) -> None:
@@ -58,7 +54,7 @@ def run_visualizer(
             self._image_sub = self.create_subscription(Image, image_topic, self._image_callback, 10)
             self._odom_sub = self.create_subscription(Odometry, odom_topic, self._odom_callback, 10)
             self._timer = self.create_timer(0.033, self._render)
-            logger.info("Visualizer started — poses auto-saved to %s", pose_log)
+            logger.info("Visualizer started, waiting for image & odom...")
 
         def _image_callback(self, msg: Image) -> None:
             try:
@@ -75,7 +71,7 @@ def run_visualizer(
                 return
             display = img.copy()
 
-            panel_w, panel_h = 380, 100
+            panel_w, panel_h = 370, 120
             overlay = display.copy()
             cv2.rectangle(overlay, (8, 8), (8 + panel_w, 8 + panel_h), (0, 0, 0), -1)
             display = cv2.addWeighted(overlay, 0.55, display, 0.45, 0)
@@ -119,6 +115,15 @@ def run_visualizer(
                     (255, 100, 100),
                     2,
                 )
+                cv2.putText(
+                    display,
+                    "SPACE: save pose to file",
+                    (20, 122),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.45,
+                    (180, 180, 180),
+                    1,
+                )
             else:
                 cv2.putText(
                     display,
@@ -133,11 +138,9 @@ def run_visualizer(
             cv2.imshow("TagSLAM Visualizer", display)
             key = cv2.waitKey(1) & 0xFF
             if key == 27 or key == ord("q"):
-                if self._latest_pose is not None:
-                    _save_pose(self._latest_pose, force=True)
                 raise KeyboardInterrupt
             if key == 32 and self._latest_pose is not None:
-                _save_pose(self._latest_pose, force=True)
+                _save_pose(self._latest_pose)
 
         def destroy_node(self) -> None:
             cv2.destroyAllWindows()
@@ -158,4 +161,3 @@ def run_visualizer(
         except Exception:
             pass
         _log_file.close()
-        logger.info("Pose log saved to: %s", pose_log)
