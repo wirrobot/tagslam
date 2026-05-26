@@ -13,6 +13,7 @@ from tagslam_tools.calibrate import calibrate_from_images
 from tagslam_tools.camera import interactive_capture, publish_camera_loop
 from tagslam_tools.commands.calibrate import calibrate_app
 from tagslam_tools.commands.camera import camera_app
+from tagslam_tools.commands.generate import generate_app
 from tagslam_tools.commands.launch import _launch_all, launch_app
 from tagslam_tools.commands.visualizer import visualizer_app
 from tagslam_tools.utils import (
@@ -36,6 +37,7 @@ app = typer.Typer(
 
 app.add_typer(camera_app, name="camera", help="Camera capture and publishing")
 app.add_typer(calibrate_app, name="calibrate", help="Camera calibration")
+app.add_typer(generate_app, name="generate", help="AprilTag marker generation")
 app.add_typer(visualizer_app, name="visualize", help="SLAM visualization")
 app.add_typer(launch_app, name="launch", help="Launch the full pipeline")
 
