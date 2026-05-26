@@ -16,6 +16,10 @@ _CAMERA_K = np.array(
 )
 _CAMERA_D = np.zeros(5, dtype=np.float64)  # no distortion assumed for PnP
 
+# Rotation: {x:0, y:1.5708, z:0} → maps tag-local coords to world coords
+#  tag z (out of tag) → world x (perpendicular to wall)
+_R_TAG_TO_WORLD, _ = cv2.Rodrigues(np.array([0.0, 1.5708, 0.0], dtype=np.float64))
+
 _TAG0_OBJECT_POINTS = np.array(
     [
         [-0.06415, -0.06415, 0.0],
@@ -96,8 +100,15 @@ def run_visualizer(
                         flags=cv2.SOLVEPNP_IPPE_SQUARE,
                     )
                     if ret:
+                        # Transform PnP result to world coordinates
+                        # tvec = Tag 0 origin in camera frame
+                        # Camera in tag frame = -R_cam_tag^T * tvec
+                        # Camera in world = R_tag_world * cam_in_tag
+                        R_cam_tag, _ = cv2.Rodrigues(rvec)
+                        cam_in_tag = -R_cam_tag.T @ tvec.ravel()
+                        cam_in_world = (_R_TAG_TO_WORLD @ cam_in_tag).ravel()
                         self._latest_tag0 = (
-                            tvec.ravel().astype(np.float64),  # type: ignore[union-attr]
+                            cam_in_world.astype(np.float64),
                             rvec.ravel().astype(np.float64),  # type: ignore[union-attr]
                         )
                     return
