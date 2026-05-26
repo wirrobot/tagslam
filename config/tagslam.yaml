@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-# 三 AprilTag 配置：贴在水平墙上，小-大-小排列
+# 两 AprilTag 配置：贴在水平墙上，上下排列（A4 纸竖向）
 #
 # 坐标系定义（World / Body 原点 = 大 Tag ID=0 的中心）：
 #   x 轴 — 垂直于墙面，指向摄像头方向（从墙向摄像头为正）
@@ -7,9 +7,15 @@
 #   z 轴 — 竖直向上
 #
 # Tag 布局（面向墙的视角）：
-#   [Tag 1: ID=1, 64.16mm]  [Tag 0: ID=0, 128.3mm]  [Tag 2: ID=2, 64.16mm]
-#        ← 左                中(原点)                右 →
-#      y = -0.4            y = 0.0               y = +0.4
+#        ┌───────────────────┐
+#        │  Tag 0 (大)       │  ID=0  128.3mm  原点 (0,0,0)
+#        │  z = 0            │
+#        └───────────────────┘
+#               ↕ gap 64.16mm
+#        ┌─────────────┐
+#        │  Tag 1 (小)  │        ID=1  64.16mm  z = -0.160m
+#        │  z = -0.160  │
+#        └─────────────┘
 #
 # 旋转说明：rotation 使用轴角(Axis-Angle)表示法
 #   {x:0, y:1.5708, z:0} = 绕 y 轴旋转 90°(π/2)
@@ -17,14 +23,14 @@
 # ═══════════════════════════════════════════════════════════════
 
 tagslam_parameters:
-  optimizer_mode: slow               # slow = iSAM2增量 + 误差大时回退全优化
-  minimum_viewing_angle: 15.0        # 光轴与 tag 表面间最小角度(度)，小于此角度忽略
-  minimum_tag_area: 200              # 最小 tag 面积(像素²)，2cm 小 tag 需要调低此值
-  max_num_incremental_opt: 50        # 增量优化次数后触发一次全优化
-  pixel_noise: 1.0                   # 角点检测噪声(像素)
-  max_subgraph_error: 500.0          # 子图最大允许误差（调大以适应不完美的 Homography）
-  ambiguity_angle_threshold: 40.0   # 位姿二义性检查的角度阈值(度)，低于此角度才检查 flip risk
-  max_ambiguity_ratio: 0.5          # 最大允许的二义性比率（默认0.3，调大以容忍更大的位姿不确定性）
+  optimizer_mode: slow
+  minimum_viewing_angle: 15.0
+  minimum_tag_area: 200
+  max_num_incremental_opt: 50
+  pixel_noise: 1.0
+  max_subgraph_error: 500.0
+  ambiguity_angle_threshold: 40.0
+  max_ambiguity_ratio: 0.5
   subgraph_abs_prior_position_noise: 0.1
   subgraph_abs_prior_rotation_noise: 0.1
   use_approximate_sync: false
@@ -36,11 +42,11 @@ body_defaults:
 default_body: tag_map
 
 bodies:
-  - tag_map:                          # 静态 Body — 包含墙上3个 Tag
-      is_static: true                 # 静止不动
-      default_tag_size: 0.15          # 默认 tag 边长(米)
+  - tag_map:
+      is_static: true
+      default_tag_size: 0.1283
       type: simple
-      pose:                           # Body 在世界坐标系中的位姿（原点即 Tag 0 中心）
+      pose:
         position:
           x: 0
           y: 0
@@ -69,7 +75,7 @@ bodies:
               z: 0.0
             rotation:
               x: 0
-              y: 1.5708            # 绕 y 轴转90°，Tag法线 → World x
+              y: 1.5708
               z: 0
             position_noise:
               x: 0.0001
@@ -80,51 +86,29 @@ bodies:
               y: 1.0e-05
               z: 1.0e-05
 
-        # ── Tag 1：小 tag，64.16mm，左侧 ──
+        # ── Tag 1：小 tag，64.16mm，正下方 ──
         - id: 1
           size: 0.06416
           bits: 6
           pose:
             position:
               x: 0.0
-              y: -0.4               # 左 40cm（面向墙时）— 粗略先验
-              z: 0.0
+              y: 0.0
+              z: -0.160              # 下方 160mm (大tag半高 + gap + 小tag半高)
             rotation:
               x: 0
               y: 1.5708
               z: 0
             position_noise:
-              x: 0.1                # 大方差 = 允许 SLAM 自动修正位置
-              y: 0.1
-              z: 0.1
-            rotation_noise:
-              x: 0.01
+              x: 0.01                # 弱先验，允许 SLAM 自动微调
               y: 0.01
               z: 0.01
-
-        # ── Tag 2：小 tag，64.16mm，右侧 ──
-        - id: 2
-          size: 0.06416
-          bits: 6
-          pose:
-            position:
-              x: 0.0
-              y: 0.4                # 右 40cm（面向墙时）— 粗略先验
-              z: 0.0
-            rotation:
-              x: 0
-              y: 1.5708
-              z: 0
-            position_noise:
-              x: 0.1                # 大方差 = 允许 SLAM 自动修正位置
-              y: 0.1
-              z: 0.1
             rotation_noise:
-              x: 0.01
-              y: 0.01
-              z: 0.01
+              x: 0.001
+              y: 0.001
+              z: 0.001
 
-  - rig:                              # 动态 Body — 摄像头挂在上面
-      is_static: false                # 会运动
+  - rig:
+      is_static: false
       type: simple
       odom_frame_id: body_rig
