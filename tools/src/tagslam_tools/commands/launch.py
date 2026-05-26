@@ -142,16 +142,4 @@ def _launch_all(viz: bool = False) -> None:
                 p.wait()
         section()
         console.print("  All nodes stopped.", style="warn")
-        console.print("  Press Enter to exit...", style="dim")
-        # drain stdin then wait for Enter
-        import select
-
-        while select.select([sys.stdin], [], [], 0.0)[0]:
-            try:
-                sys.stdin.read(1)
-            except Exception:
-                break
-        try:
-            input()
-        except (EOFError, KeyboardInterrupt):
-            pass
+        console.print("  Pose data saved to pose_log.txt", style="item")
