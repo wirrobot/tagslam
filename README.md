@@ -166,6 +166,65 @@ to the current directory.
 
 ---
 
+### 7. Tag Detection Test
+
+A stand-alone test script validates AprilTag detection and 6-DOF
+pose estimation using `pupil_apriltags` (no ROS2 required).
+The script auto-checks dependencies on launch.
+
+#### Run
+
+```bash
+# Place your test image (must be named test.jpg)
+cp your_tag_image.jpg tools/tests/test.jpg
+
+# One-click run — shows pixel coordinates AND pose
+./run_test_tag.sh -sv
+```
+
+#### What is tested
+
+The script runs **5 tests** using the camera intrinsics and tag
+sizes from `config/cameras.yaml` and `config/tagslam.yaml`:
+
+1. **Image load** — verifies `test.jpg` is a valid grayscale image.
+2. **Tag detection** — prints each tag's ID, family, hamming distance, and **4 corner pixel coordinates**.
+3. **Corners validation** — corners must lie within image bounds and form a convex quad.
+4. **Pose estimation** — computes 6-DOF pose (3×3 rotation matrix, 3×1 translation vector) using the tag size configured for the detected ID.
+5. **Pose consistency** — verifies that the distance ratio matches the tag-size ratio when a single tag is estimated with two different sizes.
+
+#### Output example
+
+```
+────────────────────────────────────────────────────────
+  Tag ID=0  (with pose)
+────────────────────────────────────────────────────────
+  Family:          tag36h11
+  Hamming:         0
+  Decision margin: 120.00
+  Corners (px):
+    [  539.79,   460.21]
+    [  739.88,   459.87]
+    [  739.87,   259.87]
+    [  540.13,   259.87]
+  Pose  (tag_size=0.1283 m):
+    R = [[ 0.9999  0.0001 -0.0137]
+         [ 0.0001  0.9999  0.0135]
+         [ 0.0137 -0.0135  0.9998]]
+    t = [-0.0055  0.0027  1.0606]  m
+    Distance: 1.0606 m
+    Error:    0.000000
+```
+
+#### Advanced options
+
+```bash
+./run_test_tag.sh -k pose -sv     # run only pose-related tests
+./run_test_tag.sh -h              # show all pytest passthrough options
+```
+
+---
+
 ### Files in `config/`
 
 | File | Purpose |
