@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 import os
+import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Annotated
 
@@ -114,16 +116,41 @@ def _launch_all(viz: bool = False) -> None:
     section()
     console.print("  Press Ctrl+C to stop all nodes.", style="dim")
 
+    _shutdown = False
+
+    def _on_signal(sig: int, frame: object) -> None:
+        nonlocal _shutdown
+        _shutdown = True
+
+    prev_sigint = signal.signal(signal.SIGINT, _on_signal)
+    prev_sigterm = signal.signal(signal.SIGTERM, _on_signal)
+
     try:
-        procs[0].wait()
-    except KeyboardInterrupt:
-        pass
+        while not _shutdown:
+            time.sleep(0.5)
     finally:
+        signal.signal(signal.SIGINT, prev_sigint)
+        signal.signal(signal.SIGTERM, prev_sigterm)
         for p in procs:
             p.terminate()
+        time.sleep(0.5)
+        for p in procs:
+            try:
+                p.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                p.kill()
+                p.wait()
         section()
         console.print("  All nodes stopped.", style="warn")
         console.print("  Press Enter to exit...", style="dim")
+        # drain stdin then wait for Enter
+        import select
+
+        while select.select([sys.stdin], [], [], 0.0)[0]:
+            try:
+                sys.stdin.read(1)
+            except Exception:
+                break
         try:
             input()
         except (EOFError, KeyboardInterrupt):
