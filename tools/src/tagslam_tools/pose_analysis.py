@@ -8,19 +8,24 @@ from typing import Any
 
 
 def parse_pose_log(filepath: str) -> list[dict[str, Any]]:
-    """Parse pose_log.txt into a list of dicts with keys: ts, x, y, z, qx, qy, qz, qw."""
+    """Parse a pose log file into a list of dicts with keys: ts, x, y, z."""
     entries: list[dict[str, Any]] = []
-    pattern = re.compile(
+    # Match either full format (with quaternion) or simple format (xyz only)
+    pattern_full = re.compile(
         r"^(?P<ts>[\d.]+)\s+"
         r"x=(?P<x>[-\d.]+)\s+y=(?P<y>[-\d.]+)\s+z=(?P<z>[-\d.]+)\s+"
         r"qx=(?P<qx>[-\d.]+)\s+qy=(?P<qy>[-\d.]+)\s+qz=(?P<qz>[-\d.]+)\s+qw=(?P<qw>[-\d.]+)"
+    )
+    pattern_simple = re.compile(
+        r"^(?P<ts>[\d.]+)\s+"
+        r"x=(?P<x>[-\d.]+)\s+y=(?P<y>[-\d.]+)\s+z=(?P<z>[-\d.]+)"
     )
     with open(filepath) as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
-            m = pattern.match(line)
+            m = pattern_full.match(line) or pattern_simple.match(line)
             if m:
                 entries.append(
                     {
@@ -28,10 +33,6 @@ def parse_pose_log(filepath: str) -> list[dict[str, Any]]:
                         "x": float(m.group("x")),
                         "y": float(m.group("y")),
                         "z": float(m.group("z")),
-                        "qx": float(m.group("qx")),
-                        "qy": float(m.group("qy")),
-                        "qz": float(m.group("qz")),
-                        "qw": float(m.group("qw")),
                     }
                 )
     return entries
