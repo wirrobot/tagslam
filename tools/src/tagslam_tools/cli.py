@@ -17,6 +17,7 @@ from tagslam_tools.commands.camera import camera_app
 from tagslam_tools.commands.generate import generate_app
 from tagslam_tools.commands.launch import _launch_all, launch_app
 from tagslam_tools.commands.visualizer import visualizer_app
+from tagslam_tools.pose_analysis import analyze_pose_log
 from tagslam_tools.utils import (
     PALETTE,
     console,
@@ -91,6 +92,8 @@ def _interactive_menu() -> None:
                 make_choice("launch --viz", "Start full pipeline with visualizer"),
                 make_choice("launch", "Start full pipeline only"),
                 make_choice("visualize", "Live SLAM pose overlay on camera feed"),
+                questionary.Separator("Analysis"),
+                make_choice("analyze", "Compute distances from pose log file"),
                 questionary.Separator(""),
                 questionary.Choice(
                     title=[(f"fg:{PALETTE['muted']}", "  exit")],
@@ -116,6 +119,8 @@ def _interactive_menu() -> None:
                 _launch_all(viz=False)
             case "visualize":
                 run_visualizer()
+            case "analyze":
+                analyze_pose_log("pose_log.txt")
             case _:
                 logger.warning("Unknown menu action: %s", action)
 
