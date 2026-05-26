@@ -1,28 +1,27 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════════════════
 # TagSLAM 一键运行脚本
-# 用法: bash run.sh [visualize]
-#   visualize — 额外启动可视化调试窗口
+# 用法:
+#   bash run.sh              — 仅启动 SLAM
+#   bash run.sh viz          — SLAM + 可视化窗口
+#   uv run tagslam-tools menu — 交互式菜单
 # ═══════════════════════════════════════════════════════════════
-set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CONFIG_DIR="$SCRIPT_DIR"
-WS_DIR="$(dirname "$SCRIPT_DIR")"
+TOOLS_DIR="$SCRIPT_DIR/tools"
 
-# 自动查找 ROS2 环境
-# Always source base ROS2 first, then the workspace overlay on top
+# Source ROS2
 source /opt/ros/humble/setup.bash 2>/dev/null \
   || source /opt/ros/jazzy/setup.bash 2>/dev/null \
   || source /opt/ros/rolling/setup.bash 2>/dev/null
 
-if [ -f "$WS_DIR/install/setup.bash" ]; then
-    source "$WS_DIR/install/setup.bash"
+# Source workspace overlay
+if [ -f "$SCRIPT_DIR/install/setup.bash" ]; then
+    source "$SCRIPT_DIR/install/setup.bash"
 fi
 
 echo "═══════════════════════════════════════"
-echo "  TagSLAM一键启动"
-echo "  config dir: $CONFIG_DIR"
+echo "  TagSLAM 一键启动"
 echo "═══════════════════════════════════════"
 
 cleanup() {
@@ -34,41 +33,46 @@ cleanup() {
 }
 trap cleanup SIGINT SIGTERM
 
-# ── 启动摄像头发布节点 ──
+CONFIG="$SCRIPT_DIR/config"
+
+# Start camera publisher using CLI
 echo "[1/4] Starting camera publisher..."
-python3 "$CONFIG_DIR/camera_pub.py" &
+cd "$TOOLS_DIR" && uv run python -c "from tagslam_tools.camera import publish_camera_loop; publish_camera_loop()" &
 sleep 1
 
-# ── 启动 sync_and_detect（Tag 检测）──
+# Start sync_and_detect
 echo "[2/4] Starting sync_and_detect..."
 ros2 launch tagslam sync_and_detect.launch.py \
-    cameras:="$CONFIG_DIR/cameras.yaml" \
-    tagslam_config:="$CONFIG_DIR/tagslam.yaml" \
+    cameras:="$CONFIG/cameras.yaml" \
+    tagslam_config:="$CONFIG/tagslam.yaml" \
     use_approximate_sync:=True &
-
 sleep 2
 
-# ── 启动 tagslam（SLAM 优化）──
+# Start tagslam
 echo "[3/4] Starting tagslam..."
 ros2 launch tagslam tagslam.launch.py \
-    cameras:="$CONFIG_DIR/cameras.yaml" \
-    camera_poses:="$CONFIG_DIR/camera_poses.yaml" \
-    tagslam_config:="$CONFIG_DIR/tagslam.yaml" \
+    cameras:="$CONFIG/cameras.yaml" \
+    camera_poses:="$CONFIG/camera_poses.yaml" \
+    tagslam_config:="$CONFIG/tagslam.yaml" \
     use_approximate_sync:=True &
-
 sleep 2
 
-# ── 可选：启动可视化 ──
-if [ "${1:-}" = "visualize" ]; then
+# Optional visualizer
+if [ "${1:-}" = "viz" ] || [ "${1:-}" = "visualize" ]; then
     echo "[4/4] Starting visualizer..."
-    python3 "$CONFIG_DIR/visualizer.py" &
+    cd "$TOOLS_DIR" && uv run python -c "from tagslam_tools.visualizer import run_visualizer; run_visualizer()" &
 fi
 
 echo ""
 echo "All nodes running. Press Ctrl+C to stop."
 echo "  Topics:"
-echo "    /detector/tags          — 检测到的 Tag"
-echo "    /odom/body_rig          — 摄像头位姿"
+echo "    camera/image_raw      — 摄像头画面"
+echo "    /detector/tags        — 检测到的 Tag"
+echo "    /odom/body_rig        — 摄像头位姿"
+echo ""
+
+# Show interactive menu option
+echo "Tip: run 'cd tools && uv run tagslam-tools menu' for interactive mode"
 echo ""
 
 wait

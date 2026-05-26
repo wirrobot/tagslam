@@ -7,3 +7,7 @@ tag_bag/
 tag_corners.txt
 *.pyc
 __pycache__/
+tools/.venv/
+tools/.pytest_cache/
+tools/__pycache__/
+

@@ -80,49 +80,49 @@ bodies:
               y: 1.0e-05
               z: 1.0e-05
 
-        # ── Tag 1：小 tag，2cm，左侧（y = -0.4）──
+        # ── Tag 1：小 tag，2cm，左侧 ──
         - id: 1
           size: 0.02
           bits: 6
           pose:
             position:
               x: 0.0
-              y: -0.4               # 左 40cm（面向墙时）
+              y: -0.4               # 左 40cm（面向墙时）— 粗略先验
               z: 0.0
             rotation:
               x: 0
               y: 1.5708
               z: 0
             position_noise:
-              x: 0.0001
-              y: 0.0001
-              z: 0.0001
+              x: 0.1                # 大方差 = 允许 SLAM 自动修正位置
+              y: 0.1
+              z: 0.1
             rotation_noise:
-              x: 1.0e-05
-              y: 1.0e-05
-              z: 1.0e-05
+              x: 0.01
+              y: 0.01
+              z: 0.01
 
-        # ── Tag 2：小 tag，2cm，右侧（y = +0.4）──
+        # ── Tag 2：小 tag，2cm，右侧 ──
         - id: 2
           size: 0.02
           bits: 6
           pose:
             position:
               x: 0.0
-              y: 0.4                # 右 40cm（面向墙时）
+              y: 0.4                # 右 40cm（面向墙时）— 粗略先验
               z: 0.0
             rotation:
               x: 0
               y: 1.5708
               z: 0
             position_noise:
-              x: 0.0001
-              y: 0.0001
-              z: 0.0001
+              x: 0.1                # 大方差 = 允许 SLAM 自动修正位置
+              y: 0.1
+              z: 0.1
             rotation_noise:
-              x: 1.0e-05
-              y: 1.0e-05
-              z: 1.0e-05
+              x: 0.01
+              y: 0.01
+              z: 0.01
 
   - rig:                              # 动态 Body — 摄像头挂在上面
       is_static: false                # 会运动

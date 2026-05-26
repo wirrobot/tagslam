@@ -14,7 +14,7 @@ ROS2 Humble / Jazzy / Rolling.
 ## Quick Start (3-AprilTag Example)
 
 This repository includes a ready-to-use configuration for a **3-AprilTag**
-setup under `my_config/`.
+setup under `config/`.
 
 ### Tag Layout
 
@@ -78,7 +78,7 @@ source install/setup.bash
 
 ### 3. Configure Your Camera
 
-Edit `my_config/cameras.yaml` — update these fields to match your hardware:
+Edit `config/cameras.yaml` — update these fields to match your hardware:
 
 ```yaml
 cam0:
@@ -89,10 +89,15 @@ cam0:
 ```
 
 If you don't have a ROS2 camera driver (e.g. using a phone camera via
-Iriun/DroidCam), a built-in camera publisher is provided:
+Iriun/DroidCam), use the built-in CLI tool:
 
 ```bash
-python3 my_config/camera_pub.py &
+cd tools && uv run tagslam-tools publish
+```
+Or for interactive capture and calibration:
+```bash
+cd tools && uv run tagslam-tools capture   # SPACE to save frames
+cd tools && uv run tagslam-tools calibrate # calibrate from saved images
 ```
 
 ---
@@ -103,19 +108,26 @@ After building and configuring, start everything with a single command:
 
 ```bash
 # Run SLAM only (background)
-bash my_config/run.sh
+bash run.sh
 
 # Run SLAM + live visualizer overlay (shows camera XYZ on image)
-bash my_config/run.sh visualize
+bash run.sh viz
+```
+
+Or use the interactive menu:
+
+```bash
+cd tools && uv run tagslam-tools menu
 ```
 
 `run.sh` automatically:
-1. Sources the workspace
-2. Launches `sync_and_detect` (tag detection)
-3. Launches `tagslam` (SLAM optimization)
-4. Optionally launches `visualizer.py` (real-time debug overlay)
+1. Sources the ROS2 workspace
+2. Launches `camera_pub` (via CLI tool)
+3. Launches `sync_and_detect` (tag detection)
+4. Launches `tagslam` (SLAM optimization)
+5. Optionally launches `visualizer` (real-time debug overlay)
 
-Press `Ctrl+C` to stop all nodes. In the visualizer window, press `Q` or `Esc` to close.
+Press `Ctrl+C` to stop all nodes.
 
 ---
 
@@ -128,7 +140,7 @@ Press `Ctrl+C` to stop all nodes. In the visualizer window, press `Q` or `Esc` t
 | `/odom/body_rig` | `nav_msgs/Odometry` | Camera rig pose (appears after first tag is seen) |
 | `/tf` | `tf2_msgs/TFMessage` | All transforms (world→rig→cam, rig→tag) |
 
-The visualizer (`my_config/visualizer.py`) overlays the camera's current
+The visualizer (`config/visualizer.py`) overlays the camera's current
 X/Y/Z position on the live camera feed (top-left panel).
 
 ---
@@ -144,16 +156,24 @@ to the current directory.
 
 ---
 
-### Files in `my_config/`
+### Files in `config/`
 
 | File | Purpose |
 |------|---------|
 | `cameras.yaml` | Camera intrinsics, distortion, topic names |
 | `camera_poses.yaml` | Camera-to-rig extrinsic prior (optional) |
 | `tagslam.yaml` | Tag layout, body definitions, SLAM parameters |
-| `run.sh` | One-click launch (sync_and_detect + tagslam + visualizer) |
-| `visualizer.py` | Live debug window: camera feed + XYZ overlay |
-| `camera_pub.py` | Simple OpenCV-based camera publisher (phone/webcam) |
+
+### Python Tools (`tools/`)
+
+| Command | Purpose |
+|--------|---------|
+| `uv run tagslam-tools menu` | Interactive menu for all operations |
+| `uv run tagslam-tools publish` | Publish camera frames to ROS2 |
+| `uv run tagslam-tools capture` | Interactive camera preview + capture |
+| `uv run tagslam-tools calibrate` | Calibrate camera from chessboard images |
+| `uv run tagslam-tools visualize` | Live SLAM pose overlay on camera feed |
+| `uv run tagslam-tools launch` | One-click launch full pipeline |
 
 ---
 
