@@ -123,3 +123,8 @@ def _launch_all(viz: bool = False) -> None:
             p.terminate()
         section()
         console.print("  All nodes stopped.", style="warn")
+        console.print("  Press Enter to exit...", style="dim")
+        try:
+            input()
+        except (EOFError, KeyboardInterrupt):
+            pass

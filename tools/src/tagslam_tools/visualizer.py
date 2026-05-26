@@ -20,6 +20,7 @@ def run_visualizer(
 
     Press SPACE to save current pose to *pose_log* (one line per entry).
     Press Q / Esc to quit.
+    Press Enter to exit after closing.
 
     Requires ROS2 environment sourced.
     """
@@ -161,3 +162,9 @@ def run_visualizer(
         except Exception:
             pass
         _log_file.close()
+
+    logger.info("Visualizer stopped. Press Enter to exit...")
+    try:
+        input()
+    except (EOFError, KeyboardInterrupt):
+        pass
