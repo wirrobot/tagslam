@@ -10,4 +10,5 @@ __pycache__/
 tools/.venv/
 tools/.pytest_cache/
 tools/__pycache__/
+pic/
 
