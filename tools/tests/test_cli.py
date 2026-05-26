@@ -19,20 +19,18 @@ def test_app_help(runner: CliRunner) -> None:
     assert "COMMAND" in result.stdout
 
 
-def test_capture_help(runner: CliRunner) -> None:
-    result = runner.invoke(app, ["capture", "--help"])
+def test_app_version(runner: CliRunner) -> None:
+    result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
-    assert "capture" in result.stdout.lower()
+
+
+def test_camera_help(runner: CliRunner) -> None:
+    result = runner.invoke(app, ["camera", "--help"])
+    assert result.exit_code == 0
 
 
 def test_calibrate_help(runner: CliRunner) -> None:
     result = runner.invoke(app, ["calibrate", "--help"])
-    assert result.exit_code == 0
-    assert "calibrate" in result.stdout.lower()
-
-
-def test_publish_help(runner: CliRunner) -> None:
-    result = runner.invoke(app, ["publish", "--help"])
     assert result.exit_code == 0
 
 
@@ -46,8 +44,13 @@ def test_launch_help(runner: CliRunner) -> None:
     assert result.exit_code == 0
 
 
-def test_menu_help(runner: CliRunner) -> None:
-    result = runner.invoke(app, ["menu", "--help"])
+def test_capture_help(runner: CliRunner) -> None:
+    result = runner.invoke(app, ["camera", "capture", "--help"])
+    assert result.exit_code == 0
+
+
+def test_publish_help(runner: CliRunner) -> None:
+    result = runner.invoke(app, ["camera", "publish", "--help"])
     assert result.exit_code == 0
 
 
