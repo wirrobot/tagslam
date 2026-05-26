@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 import cv2
 import numpy as np
@@ -13,8 +14,12 @@ logger = logging.getLogger(__name__)
 def run_visualizer(
     image_topic: str = "camera/image_raw",
     odom_topic: str = "/odom/body_rig",
+    pose_log: str = "pose_log.txt",
 ) -> None:
     """Launch a window displaying the camera feed with overlaid pose coordinates.
+
+    Press SPACE to save current pose to *pose_log* (one line per entry).
+    Press Q / Esc to quit.
 
     Requires ROS2 environment sourced.
     """
@@ -23,6 +28,21 @@ def run_visualizer(
     from nav_msgs.msg import Odometry
     from rclpy.node import Node
     from sensor_msgs.msg import Image
+
+    _log_file = open(pose_log, "a")  # noqa: SIM115
+
+    def _save_pose(pose) -> None:
+        p = pose.position
+        o = pose.orientation
+        ts = time.time()
+        line = (
+            f"{ts:.6f} "
+            f"x={p.x:.6f} y={p.y:.6f} z={p.z:.6f} "
+            f"qx={o.x:.6f} qy={o.y:.6f} qz={o.z:.6f} qw={o.w:.6f}\n"
+        )
+        _log_file.write(line)
+        _log_file.flush()
+        logger.info("Pose saved to %s: x=%.3f y=%.3f z=%.3f", pose_log, p.x, p.y, p.z)
 
     class Visualizer(Node):
         def __init__(self) -> None:
@@ -51,7 +71,7 @@ def run_visualizer(
                 return
             display = img.copy()
 
-            panel_w, panel_h = 360, 100
+            panel_w, panel_h = 370, 120
             overlay = display.copy()
             cv2.rectangle(overlay, (8, 8), (8 + panel_w, 8 + panel_h), (0, 0, 0), -1)
             display = cv2.addWeighted(overlay, 0.55, display, 0.45, 0)
@@ -95,6 +115,15 @@ def run_visualizer(
                     (255, 100, 100),
                     2,
                 )
+                cv2.putText(
+                    display,
+                    "SPACE: save pose to file",
+                    (20, 122),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.45,
+                    (180, 180, 180),
+                    1,
+                )
             else:
                 cv2.putText(
                     display,
@@ -107,8 +136,11 @@ def run_visualizer(
                 )
 
             cv2.imshow("TagSLAM Visualizer", display)
-            if cv2.waitKey(1) & 0xFF in (27, ord("q")):
+            key = cv2.waitKey(1) & 0xFF
+            if key == 27 or key == ord("q"):
                 raise KeyboardInterrupt
+            if key == 32 and self._latest_pose is not None:
+                _save_pose(self._latest_pose)
 
         def destroy_node(self) -> None:
             cv2.destroyAllWindows()
@@ -128,3 +160,4 @@ def run_visualizer(
             rclpy.shutdown()
         except Exception:
             pass
+        _log_file.close()

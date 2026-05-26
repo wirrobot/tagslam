@@ -94,7 +94,7 @@ bodies:
             position:
               x: 0.0
               y: 0.0
-              z: -0.160              # 下方 160mm (大tag半高 + gap + 小tag半高)
+              z: -0.16041              # 下方 160mm (大tag半高 + gap + 小tag半高)
             rotation:
               x: 0
               y: 1.5708
