@@ -1,3 +1,6 @@
+.venv/
+.pytest_cache/
+__pycache__/
 build/
 install/
 log/
@@ -6,9 +9,6 @@ out.bag/
 tag_bag/
 tag_corners.txt
 *.pyc
-__pycache__/
-tools/.venv/
-tools/.pytest_cache/
-tools/__pycache__/
+*.log
 pic/
 

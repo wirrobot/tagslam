@@ -1,15 +1,17 @@
 .PHONY: test lint typecheck check
 
+PYSRC = tools/src/tagslam_tools tools/tests
+
 test:
-	cd tools && env -u PYTHONPATH uv run pytest
+	env -u PYTHONPATH uv run pytest $(PYSRC)
 
 lint:
-	cd tools && uv run ruff check src tests
+	uv run ruff check $(PYSRC)
 
 format-check:
-	cd tools && uv run ruff format --check src tests
+	uv run ruff format --check $(PYSRC)
 
 typecheck:
-	cd tools && env -u PYTHONPATH uv run mypy src tests --python-version 3.10
+	env -u PYTHONPATH uv run mypy $(PYSRC)
 
 check: lint format-check typecheck test

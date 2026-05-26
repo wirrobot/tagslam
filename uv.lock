@@ -16,6 +16,11 @@ resolution-markers = [
     "(python_full_version < '3.11' and platform_machine != 'aarch64' and sys_platform == 'linux') or (python_full_version < '3.11' and sys_platform != 'darwin' and sys_platform != 'linux')",
 ]
 
+[manifest]
+members = [
+    "tagslam-tools",
+]
+
 [[package]]
 name = "annotated-doc"
 version = "0.0.4"
@@ -458,7 +463,7 @@ wheels = [
 [[package]]
 name = "tagslam-tools"
 version = "0.1.0"
-source = { editable = "." }
+source = { editable = "tools" }
 dependencies = [
     { name = "numpy" },
     { name = "opencv-python" },

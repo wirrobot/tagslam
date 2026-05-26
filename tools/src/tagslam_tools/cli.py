@@ -43,6 +43,7 @@ app.add_typer(launch_app, name="launch", help="Launch the full pipeline")
 @app.callback()
 def main(
     ctx: typer.Context,
+    menu: Annotated[bool, typer.Option("--menu", help="Launch interactive menu mode")] = False,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable debug logging")] = False,
     version: Annotated[
         bool | None,
@@ -54,7 +55,7 @@ def main(
     if version:
         console.print(f"tagslam-tools v{__version__}", style="heading")
         raise typer.Exit()
-    if ctx.invoked_subcommand is None:
+    if menu or ctx.invoked_subcommand is None:
         _show_banner()
         _interactive_menu()
 

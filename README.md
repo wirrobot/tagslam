@@ -92,12 +92,12 @@ If you don't have a ROS2 camera driver (e.g. using a phone camera via
 Iriun/DroidCam), use the built-in CLI tool:
 
 ```bash
-./tagslam-tools publish
+uv run run.py camera publish
 ```
 Or for interactive capture and calibration:
 ```bash
-./tagslam-tools capture   # SPACE to save frames
-./tagslam-tools calibrate # calibrate from saved images
+uv run run.py camera capture   # SPACE to save frames
+uv run run.py calibrate calibrate # calibrate from saved images
 ```
 
 ---
@@ -110,17 +110,24 @@ After building and configuring, source ROS2 and launch:
 source /opt/ros/$ROS_DISTRO/setup.bash
 source install/setup.bash
 
-# Run SLAM only
-./tagslam-tools launch
+# Interactive menu
+uv run run.py --menu
 
-# Run SLAM + live visualizer overlay (shows camera XYZ on image)
-./tagslam-tools launch --viz
+# Run SLAM only
+uv run run.py launch
+
+# Run SLAM + live visualizer overlay
+uv run run.py launch --viz
+
+# Direct subcommands
+uv run run.py camera capture     # capture calibration images
+uv run run.py calibrate calibrate # calibrate from images
 ```
 
 Or use the interactive menu:
 
 ```bash
-./tagslam-tools menu
+uv run run.py --menu
 ```
 
 The `launch` command automatically:
@@ -167,16 +174,16 @@ to the current directory.
 | `camera_poses.yaml` | Camera-to-rig extrinsic prior (optional) |
 | `tagslam.yaml` | Tag layout, body definitions, SLAM parameters |
 
-### Python Tools (`./tagslam-tools`)
+### Python Tools (`uv run run.py`)
 
 | Command | Purpose |
 |--------|---------|
-| `./tagslam-tools menu` | Interactive menu for all operations |
-| `./tagslam-tools publish` | Publish camera frames to ROS2 |
-| `./tagslam-tools capture` | Interactive camera preview + capture |
-| `./tagslam-tools calibrate` | Calibrate camera from chessboard images |
-| `./tagslam-tools visualize` | Live SLAM pose overlay on camera feed |
-| `./tagslam-tools launch --viz` | One-click launch full pipeline |
+| `uv run run.py --menu` | Interactive menu for all operations |
+| `uv run run.py camera publish` | Publish camera frames to ROS2 |
+| `uv run run.py camera capture` | Interactive camera preview + capture |
+| `uv run run.py calibrate calibrate` | Calibrate camera from chessboard images |
+| `uv run run.py visualize visualize` | Live SLAM pose overlay on camera feed |
+| `uv run run.py launch --viz` | One-click launch full pipeline |
 
 ---
 
