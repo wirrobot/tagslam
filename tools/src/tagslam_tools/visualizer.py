@@ -10,51 +10,70 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+_CAMERA_K = np.array(
+    [[1653.275628, 0.0, 648.592971], [0.0, 1654.027585, 355.735559], [0.0, 0.0, 1.0]],
+    dtype=np.float64,
+)
+_CAMERA_D = np.zeros(5, dtype=np.float64)  # no distortion assumed for PnP
+
+_TAG0_OBJECT_POINTS = np.array(
+    [
+        [-0.06415, -0.06415, 0.0],
+        [0.06415, -0.06415, 0.0],
+        [0.06415, 0.06415, 0.0],
+        [-0.06415, 0.06415, 0.0],
+    ],
+    dtype=np.float64,
+)
+
 
 def run_visualizer(
     image_topic: str = "camera/image_raw",
     odom_topic: str = "/odom/body_rig",
-    pose_log: str = "pose_log.txt",
+    tag_topic: str = "/detector/tags",
+    pose_log_multi: str = "pose_log_multi.txt",
+    pose_log_single: str = "pose_log_single.txt",
 ) -> None:
-    """Launch a window displaying the camera feed with overlaid pose coordinates.
+    """Visualize SLAM pose with dual recording (multi-tag vs single-tag).
 
-    Press SPACE to save current pose to *pose_log* (one line per entry).
+    Press SPACE to save BOTH poses simultaneously:
+      - multi-tag  → *pose_log_multi* (from /odom/body_rig)
+      - single-tag → *pose_log_single* (PnP from Tag 0 only)
+
     Press Q / Esc to quit.
-
     Requires ROS2 environment sourced.
     """
     import rclpy
+    from apriltag_msgs.msg import AprilTagDetectionArray
     from cv_bridge import CvBridge
     from nav_msgs.msg import Odometry
     from rclpy.node import Node
     from sensor_msgs.msg import Image
 
-    _log_file = open(pose_log, "a")  # noqa: SIM115
+    _log_multi = open(pose_log_multi, "a")  # noqa: SIM115
+    _log_single = open(pose_log_single, "a")  # noqa: SIM115
 
-    def _save_pose(pose) -> None:
-        p = pose.position
-        o = pose.orientation
+    def _save_line(fh, label: str, x: float, y: float, z: float) -> None:
         ts = time.time()
-        line = (
-            f"{ts:.6f} "
-            f"x={p.x:.6f} y={p.y:.6f} z={p.z:.6f} "
-            f"qx={o.x:.6f} qy={o.y:.6f} qz={o.z:.6f} qw={o.w:.6f}\n"
-        )
-        _log_file.write(line)
-        _log_file.flush()
-        logger.info("Pose saved to %s: x=%.3f y=%.3f z=%.3f", pose_log, p.x, p.y, p.z)
+        fh.write(f"{ts:.6f} x={x:.6f} y={y:.6f} z={z:.6f}\n")
+        fh.flush()
+        logger.info("%s saved: x=%.3f y=%.3f z=%.3f", label, x, y, z)
 
     class Visualizer(Node):
         def __init__(self) -> None:
             super().__init__("tagslam_visualizer")
             self._bridge = CvBridge()
-            self._latest_pose = None
+            self._latest_odom = None
+            self._latest_tag0: tuple[np.ndarray, np.ndarray] | None = None
             self._latest_image: np.ndarray | None = None
 
             self._image_sub = self.create_subscription(Image, image_topic, self._image_callback, 10)
             self._odom_sub = self.create_subscription(Odometry, odom_topic, self._odom_callback, 10)
+            self._tag_sub = self.create_subscription(
+                AprilTagDetectionArray, tag_topic, self._tag_callback, 10
+            )
             self._timer = self.create_timer(0.033, self._render)
-            logger.info("Visualizer started, waiting for image & odom...")
+            logger.info("Visualizer started (multi + single tag recording)")
 
         def _image_callback(self, msg: Image) -> None:
             try:
@@ -63,7 +82,25 @@ def run_visualizer(
                 logger.exception("Image conversion failed")
 
         def _odom_callback(self, msg: Odometry) -> None:
-            self._latest_pose = msg.pose.pose
+            self._latest_odom = msg.pose.pose
+
+        def _tag_callback(self, msg: AprilTagDetectionArray) -> None:
+            for det in msg.detections:
+                if det.id == 0 and det.family == "tf36h11":
+                    corners = np.array([[c.x, c.y] for c in det.corners], dtype=np.float64)
+                    ret, rvec, tvec = cv2.solvePnP(  # type: ignore[call-overload]
+                        _TAG0_OBJECT_POINTS,
+                        corners,
+                        _CAMERA_K,
+                        _CAMERA_D,
+                        flags=cv2.SOLVEPNP_IPPE_SQUARE,
+                    )
+                    if ret:
+                        self._latest_tag0 = (
+                            tvec.ravel().astype(np.float64),  # type: ignore[union-attr]
+                            rvec.ravel().astype(np.float64),  # type: ignore[union-attr]
+                        )
+                    return
 
         def _render(self) -> None:
             img = self._latest_image
@@ -71,60 +108,59 @@ def run_visualizer(
                 return
             display = img.copy()
 
-            panel_w, panel_h = 370, 120
+            panel_w, panel_h = 380, 150
             overlay = display.copy()
             cv2.rectangle(overlay, (8, 8), (8 + panel_w, 8 + panel_h), (0, 0, 0), -1)
             display = cv2.addWeighted(overlay, 0.55, display, 0.45, 0)
 
-            if self._latest_pose is not None:
-                p = self._latest_pose.position
-                x, y, z = p.x, p.y, p.z
+            line_y = 36
+            if self._latest_odom is not None:
+                p = self._latest_odom.position
                 cv2.putText(
                     display,
-                    "Camera XYZ (world frame)",
-                    (20, 36),
+                    "Multi-tag (odom)",
+                    (20, line_y),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.55,
+                    0.50,
                     (200, 200, 200),
                     1,
                 )
+                line_y += 20
                 cv2.putText(
                     display,
-                    f"X: {x:+.4f} m",
-                    (20, 62),
+                    f"X:{p.x:+.4f} Y:{p.y:+.4f} Z:{p.z:+.4f}",
+                    (20, line_y),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.60,
+                    0.55,
                     (0, 255, 0),
                     2,
                 )
+                line_y += 28
+
+            if self._latest_tag0 is not None:
+                tvec, _ = self._latest_tag0
                 cv2.putText(
                     display,
-                    f"Y: {y:+.4f} m",
-                    (20, 82),
+                    "Single-tag (Tag0 PnP)",
+                    (20, line_y),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.60,
-                    (0, 255, 255),
-                    2,
-                )
-                cv2.putText(
-                    display,
-                    f"Z: {z:+.4f} m",
-                    (20, 102),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.60,
-                    (255, 100, 100),
-                    2,
-                )
-                cv2.putText(
-                    display,
-                    "SPACE: save pose to file",
-                    (20, 122),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.45,
-                    (180, 180, 180),
+                    0.50,
+                    (200, 200, 200),
                     1,
                 )
-            else:
+                line_y += 20
+                cv2.putText(
+                    display,
+                    f"X:{tvec[0]:+.4f} Y:{tvec[1]:+.4f} Z:{tvec[2]:+.4f}",
+                    (20, line_y),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.55,
+                    (255, 200, 0),
+                    2,
+                )
+                line_y += 28
+
+            if self._latest_odom is None and self._latest_tag0 is None:
                 cv2.putText(
                     display,
                     "Waiting for pose...",
@@ -135,12 +171,29 @@ def run_visualizer(
                     2,
                 )
 
+            cv2.putText(
+                display,
+                "SPACE: save both poses",
+                (20, line_y + 4),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.45,
+                (180, 180, 180),
+                1,
+            )
+
             cv2.imshow("TagSLAM Visualizer", display)
             key = cv2.waitKey(1) & 0xFF
             if key == 27 or key == ord("q"):
                 raise KeyboardInterrupt
-            if key == 32 and self._latest_pose is not None:
-                _save_pose(self._latest_pose)
+            if key == 32:
+                if self._latest_odom is not None:
+                    p = self._latest_odom.position
+                    _save_line(_log_multi, "multi", p.x, p.y, p.z)
+                if self._latest_tag0 is not None:
+                    tvec, _ = self._latest_tag0
+                    _save_line(
+                        _log_single, "single", float(tvec[0]), float(tvec[1]), float(tvec[2])
+                    )
 
         def destroy_node(self) -> None:
             cv2.destroyAllWindows()
@@ -160,4 +213,5 @@ def run_visualizer(
             rclpy.shutdown()
         except Exception:
             pass
-        _log_file.close()
+        _log_multi.close()
+        _log_single.close()

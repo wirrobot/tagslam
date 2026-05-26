@@ -120,7 +120,9 @@ def _interactive_menu() -> None:
             case "visualize":
                 run_visualizer()
             case "analyze":
-                analyze_pose_log("pose_log.txt")
+                analyze_pose_log("pose_log_multi.txt")
+                console.print()
+                analyze_pose_log("pose_log_single.txt")
                 console.print("  Press Enter to exit...", style="dim")
                 try:
                     input()

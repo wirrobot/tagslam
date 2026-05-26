@@ -130,4 +130,4 @@ def _launch_all(viz: bool = False) -> None:
                 p.wait()
         section()
         console.print("  All nodes stopped.", style="warn")
-        console.print("  Pose data saved to pose_log.txt", style="item")
+        console.print("  Data saved to pose_log_multi.txt / pose_log_single.txt", style="item")
