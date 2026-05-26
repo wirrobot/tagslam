@@ -43,7 +43,13 @@ def _launch_all(viz: bool = False) -> None:
     procs: list[subprocess.Popen[bytes]] = []
     penv = {
         **os.environ,
-        "PYTHONPATH": f"{TOOLS_DIR / 'src'}:{os.environ.get('PYTHONPATH', '')}",
+        "PYTHONPATH": ":".join(
+            [
+                str(TOOLS_DIR / "src"),
+                str(PROJECT_ROOT / ".venv" / "lib" / "python3.10" / "site-packages"),
+                os.environ.get("PYTHONPATH", ""),
+            ]
+        ),
     }
 
     logger.info("Starting camera publisher...")

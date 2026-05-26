@@ -13,6 +13,7 @@ dependencies = [
     "rich>=13.0",
     "numpy>=1.26,<2.0",
     "pillow>=12.2.0",
+    "apriltag>=0.0.16",
 ]
 
 [project.scripts]
