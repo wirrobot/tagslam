@@ -56,3 +56,8 @@ def distances(
         result["total"],
         result["mean"],
     )
+    console.print("  Press Enter to exit...", style="dim")
+    try:
+        input()
+    except (EOFError, KeyboardInterrupt):
+        pass

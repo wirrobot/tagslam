@@ -121,6 +121,11 @@ def _interactive_menu() -> None:
                 run_visualizer()
             case "analyze":
                 analyze_pose_log("pose_log.txt")
+                console.print("  Press Enter to exit...", style="dim")
+                try:
+                    input()
+                except (EOFError, KeyboardInterrupt):
+                    pass
             case _:
                 logger.warning("Unknown menu action: %s", action)
 
