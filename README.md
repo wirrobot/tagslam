@@ -104,14 +104,17 @@ cd tools && uv run tagslam-tools calibrate # calibrate from saved images
 
 ### 4. One-Click Run
 
-After building and configuring, start everything with a single command:
+After building and configuring, source ROS2 and launch:
 
 ```bash
-# Run SLAM only (background)
-bash run.sh
+source /opt/ros/$ROS_DISTRO/setup.bash
+source install/setup.bash
+
+# Run SLAM only
+cd tools && uv run tagslam-tools launch
 
 # Run SLAM + live visualizer overlay (shows camera XYZ on image)
-bash run.sh viz
+cd tools && uv run tagslam-tools launch --viz
 ```
 
 Or use the interactive menu:
@@ -120,12 +123,12 @@ Or use the interactive menu:
 cd tools && uv run tagslam-tools menu
 ```
 
-`run.sh` automatically:
-1. Sources the ROS2 workspace
-2. Launches `camera_pub` (via CLI tool)
-3. Launches `sync_and_detect` (tag detection)
-4. Launches `tagslam` (SLAM optimization)
-5. Optionally launches `visualizer` (real-time debug overlay)
+The `launch` command automatically:
+1. Sources ROS2 environment (ensure it's sourced before running)
+2. Starts camera publisher
+3. Starts `sync_and_detect` (tag detection)
+4. Starts `tagslam` (SLAM optimization)
+5. Optionally starts visualizer (with `--viz`)
 
 Press `Ctrl+C` to stop all nodes.
 
