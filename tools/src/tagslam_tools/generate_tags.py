@@ -25,7 +25,7 @@ import ctypes
 import os
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image
 
 # ---------------------------------------------------------------------------
 # AprilTag 36h11 pattern extraction via ctypes
@@ -149,14 +149,6 @@ def generate(out_path: str = "apriltags_a4.pdf") -> str:
     x1 = (page_w_px - small_px) // 2
     y1 = block_top_px + large_px + gap_px
     canvas.paste(tag1_resized, (x1, y1))
-
-    # Center guide lines (faint)
-    draw = ImageDraw.Draw(canvas)
-    center_x = page_w_px // 2
-    center_y = page_h_px // 2
-    for i in range(-1, 2):
-        draw.line([(center_x + i, 0), (center_x + i, page_h_px)], fill=(240, 240, 240))
-        draw.line([(0, center_y + i), (page_w_px, center_y + i)], fill=(240, 240, 240))
 
     out_path = os.path.abspath(
         out_path if os.path.isabs(out_path) else os.path.join(os.getcwd(), out_path)
