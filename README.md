@@ -92,12 +92,12 @@ If you don't have a ROS2 camera driver (e.g. using a phone camera via
 Iriun/DroidCam), use the built-in CLI tool:
 
 ```bash
-cd tools && uv run tagslam-tools publish
+./tagslam-tools publish
 ```
 Or for interactive capture and calibration:
 ```bash
-cd tools && uv run tagslam-tools capture   # SPACE to save frames
-cd tools && uv run tagslam-tools calibrate # calibrate from saved images
+./tagslam-tools capture   # SPACE to save frames
+./tagslam-tools calibrate # calibrate from saved images
 ```
 
 ---
@@ -111,16 +111,16 @@ source /opt/ros/$ROS_DISTRO/setup.bash
 source install/setup.bash
 
 # Run SLAM only
-cd tools && uv run tagslam-tools launch
+./tagslam-tools launch
 
 # Run SLAM + live visualizer overlay (shows camera XYZ on image)
-cd tools && uv run tagslam-tools launch --viz
+./tagslam-tools launch --viz
 ```
 
 Or use the interactive menu:
 
 ```bash
-cd tools && uv run tagslam-tools menu
+./tagslam-tools menu
 ```
 
 The `launch` command automatically:
@@ -167,16 +167,16 @@ to the current directory.
 | `camera_poses.yaml` | Camera-to-rig extrinsic prior (optional) |
 | `tagslam.yaml` | Tag layout, body definitions, SLAM parameters |
 
-### Python Tools (`tools/`)
+### Python Tools (`./tagslam-tools`)
 
 | Command | Purpose |
 |--------|---------|
-| `uv run tagslam-tools menu` | Interactive menu for all operations |
-| `uv run tagslam-tools publish` | Publish camera frames to ROS2 |
-| `uv run tagslam-tools capture` | Interactive camera preview + capture |
-| `uv run tagslam-tools calibrate` | Calibrate camera from chessboard images |
-| `uv run tagslam-tools visualize` | Live SLAM pose overlay on camera feed |
-| `uv run tagslam-tools launch` | One-click launch full pipeline |
+| `./tagslam-tools menu` | Interactive menu for all operations |
+| `./tagslam-tools publish` | Publish camera frames to ROS2 |
+| `./tagslam-tools capture` | Interactive camera preview + capture |
+| `./tagslam-tools calibrate` | Calibrate camera from chessboard images |
+| `./tagslam-tools visualize` | Live SLAM pose overlay on camera feed |
+| `./tagslam-tools launch --viz` | One-click launch full pipeline |
 
 ---
 

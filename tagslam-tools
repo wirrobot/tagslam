@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# TagSLAM Tools launcher — run from project root
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/tools" && exec uv run tagslam-tools "$@"
