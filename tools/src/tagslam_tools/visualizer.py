@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 _CAM_PARAMS = [1653.275628, 1654.027585, 648.592971, 355.735559]
 _TAG0_SIZE = 0.1283
 
+# Rotation: {x:0, y:1.5708, z:0} maps tag-z → world-x, tag-y → world-y, tag-x → world-z
+_R_TAG_TO_WORLD = np.array([[0, 0, 1], [0, 1, 0], [-1, 0, 0]], dtype=np.float64)
+
 
 def run_visualizer(
     image_topic: str = "camera/image_raw",
@@ -72,7 +75,7 @@ def run_visualizer(
             self._latest_odom = msg.pose.pose
 
         def _compute_single_tag_pose(self) -> tuple[float, float, float] | None:
-            """Run apriltag detection on current frame, return Tag 0 pose_t."""
+            """Run apriltag detection on current frame, return Tag 0 camera pos in world frame."""
             gray = self._latest_gray
             if gray is None:
                 return None
@@ -84,11 +87,21 @@ def run_visualizer(
                 dets = det.detect(gray)
                 for d in dets:
                     if d.tag_id == 0:
+                        # pose = T_tag→cam: maps tag frame to camera frame
                         pose, _, _ = det.detection_pose(
                             d, camera_params=_CAM_PARAMS, tag_size=_TAG0_SIZE
                         )
-                        t = pose[:3, 3]
-                        return (float(t[0]), float(t[1]), float(t[2]))
+                        # camera position in tag frame = inverse(pose) origin
+                        R_tc = pose[:3, :3]  # tag → cam rotation
+                        t_tc = pose[:3, 3]  # tag origin in cam frame
+                        cam_in_tag = -R_tc.T @ t_tc  # cam origin in tag frame
+                        # Transform to world frame
+                        cam_in_world = _R_TAG_TO_WORLD @ cam_in_tag
+                        return (
+                            float(cam_in_world[0]),
+                            float(cam_in_world[1]),
+                            float(cam_in_world[2]),
+                        )
             except Exception:
                 logger.exception("Single-tag detection failed")
             return None
