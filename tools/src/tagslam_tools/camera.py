@@ -12,12 +12,12 @@ logger = logging.getLogger(__name__)
 
 
 def create_capture(
-    resolution: tuple[int, int] = (1280, 720), device: int = 1
+    resolution: tuple[int, int] = (1280, 720), device: int = 0
 ) -> cv2.VideoCapture | None:
     """Open the camera at requested resolution. Returns None on failure."""
     cap = cv2.VideoCapture(device)
     if not cap.isOpened():
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(1)
     if not cap.isOpened():
         logger.error("Failed to open camera")
         return None
