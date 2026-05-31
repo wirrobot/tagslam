@@ -4,7 +4,7 @@ cam0:
   intrinsics: [799.8855, 800.2863, 636.4467, 353.9479]  # fx, fy, cx, cy
   distortion_model: radtan                                       # radtan = 5个畸变系数
   distortion_coeffs: [-0.0412, 0.0571, 0.0, 0.0, 0.0]
-  resolution: [640, 480]
+  resolution: [1280, 720]
   image_topic: camera/image_raw
   tag_topic: /detector/tags
   rig_body: rig
