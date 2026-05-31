@@ -11,11 +11,16 @@ import cv2
 logger = logging.getLogger(__name__)
 
 
-def create_capture(resolution: tuple[int, int] = (1280, 720)) -> cv2.VideoCapture | None:
+def create_capture(
+    resolution: tuple[int, int] = (640, 480), device: int = 1
+) -> cv2.VideoCapture | None:
     """Open the camera at requested resolution. Returns None on failure."""
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(device)
     if not cap.isOpened():
-        logger.error("Failed to open camera /dev/video0")
+        # Fallback to /dev/video0
+        cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        logger.error("Failed to open camera /dev/video0 and /dev/video1")
         return None
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc(*"MJPG"))  # type: ignore[attr-defined]
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, resolution[0])
