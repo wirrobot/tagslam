@@ -11,7 +11,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # Camera intrinsics (from calibration)
-_CAM_PARAMS = [1653.275628, 1654.027585, 648.592971, 355.735559]
+_CAM_PARAMS = [799.8855, 800.2863, 636.4467, 353.9479]
 _TAG0_SIZE = 0.1283
 
 # Rotation: {x:0, y:1.5708, z:0} maps tag-z → world-x, tag-y → world-y, tag-x → world-z
