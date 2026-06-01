@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import logging
 import os
-import signal
 import subprocess
 import sys
-import time
 from pathlib import Path
 from typing import Annotated
 
@@ -45,7 +43,13 @@ def _launch_all(viz: bool = False) -> None:
     procs: list[subprocess.Popen[bytes]] = []
     penv = {
         **os.environ,
-        "PYTHONPATH": f"{TOOLS_DIR / 'src'}:{os.environ.get('PYTHONPATH', '')}",
+        "PYTHONPATH": ":".join(
+            [
+                str(TOOLS_DIR / "src"),
+                str(PROJECT_ROOT / ".venv" / "lib" / "python3.10" / "site-packages"),
+                os.environ.get("PYTHONPATH", ""),
+            ]
+        ),
     }
 
     logger.info("Starting camera publisher...")
@@ -116,24 +120,14 @@ def _launch_all(viz: bool = False) -> None:
     section()
     console.print("  Press Ctrl+C to stop all nodes.", style="dim")
 
-    _shutdown = False
-
-    def _on_signal(sig: int, frame: object) -> None:
-        nonlocal _shutdown
-        _shutdown = True
-
-    prev_sigint = signal.signal(signal.SIGINT, _on_signal)
-    prev_sigterm = signal.signal(signal.SIGTERM, _on_signal)
-
     try:
-        while not _shutdown:
-            time.sleep(0.5)
+        while True:
+            pass
+    except KeyboardInterrupt:
+        pass
     finally:
-        signal.signal(signal.SIGINT, prev_sigint)
-        signal.signal(signal.SIGTERM, prev_sigterm)
         for p in procs:
             p.terminate()
-        time.sleep(0.5)
         for p in procs:
             try:
                 p.wait(timeout=3)
@@ -142,4 +136,4 @@ def _launch_all(viz: bool = False) -> None:
                 p.wait()
         section()
         console.print("  All nodes stopped.", style="warn")
-        console.print("  Pose data saved to pose_log.txt", style="item")
+        console.print("  Data saved to pose_log_multi.txt / pose_log_single.txt", style="item")

@@ -10,17 +10,28 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# Camera intrinsics (from calibration)
+_CAM_PARAMS = [799.8855, 800.2863, 636.4467, 353.9479]
+_TAG0_SIZE = 0.1283
+
+# Rotation: {x:0, y:1.5708, z:0} maps tag-z → world-x, tag-y → world-y, tag-x → world-z
+_R_TAG_TO_WORLD = np.array([[0, 0, 1], [0, 1, 0], [-1, 0, 0]], dtype=np.float64)
+
 
 def run_visualizer(
     image_topic: str = "camera/image_raw",
     odom_topic: str = "/odom/body_rig",
-    pose_log: str = "pose_log.txt",
+    tag_topic: str = "/detector/tags",
+    pose_log_multi: str = "pose_log_multi.txt",
+    pose_log_single: str = "pose_log_single.txt",
 ) -> None:
-    """Launch a window displaying the camera feed with overlaid pose coordinates.
+    """Visualize SLAM pose with dual recording (multi-tag vs single-tag).
 
-    Pose data is auto-saved to *pose_log* on each update and on exit.
-    Press Q / Esc to quit and save the final pose.
+    Press SPACE to save BOTH poses simultaneously:
+      - multi-tag  → *pose_log_multi* (from /odom/body_rig)
+      - single-tag → *pose_log_single* (Tag 0 PnP via apriltag library)
 
+    Press Q / Esc to quit.
     Requires ROS2 environment sourced.
     """
     import rclpy
@@ -29,45 +40,71 @@ def run_visualizer(
     from rclpy.node import Node
     from sensor_msgs.msg import Image
 
-    _log_file = open(pose_log, "a")  # noqa: SIM115
-    _last_saved_ts = 0.0
+    _log_multi = open(pose_log_multi, "a")  # noqa: SIM115
+    _log_single = open(pose_log_single, "a")  # noqa: SIM115
 
-    def _save_pose(pose, force: bool = False) -> None:
-        nonlocal _last_saved_ts
+    def _save_line(fh, label: str, x: float, y: float, z: float) -> None:
         ts = time.time()
-        if not force and ts - _last_saved_ts < 0.5:
-            return
-        _last_saved_ts = ts
-        p = pose.position
-        o = pose.orientation
-        line = (
-            f"{ts:.6f} "
-            f"x={p.x:.6f} y={p.y:.6f} z={p.z:.6f} "
-            f"qx={o.x:.6f} qy={o.y:.6f} qz={o.z:.6f} qw={o.w:.6f}\n"
-        )
-        _log_file.write(line)
-        _log_file.flush()
+        fh.write(f"{ts:.6f} x={x:.6f} y={y:.6f} z={z:.6f}\n")
+        fh.flush()
+        logger.info("%s saved: x=%.3f y=%.3f z=%.3f", label, x, y, z)
 
     class Visualizer(Node):
         def __init__(self) -> None:
             super().__init__("tagslam_visualizer")
             self._bridge = CvBridge()
-            self._latest_pose = None
+            self._latest_odom = None
+            self._latest_tag0: tuple[float, float, float] | None = None
             self._latest_image: np.ndarray | None = None
+            self._latest_gray: np.ndarray | None = None
 
             self._image_sub = self.create_subscription(Image, image_topic, self._image_callback, 10)
             self._odom_sub = self.create_subscription(Odometry, odom_topic, self._odom_callback, 10)
             self._timer = self.create_timer(0.033, self._render)
-            logger.info("Visualizer started — poses auto-saved to %s", pose_log)
+            logger.info("Visualizer started (multi + single tag recording)")
 
         def _image_callback(self, msg: Image) -> None:
             try:
-                self._latest_image = self._bridge.imgmsg_to_cv2(msg, "bgr8")
+                bgr = self._bridge.imgmsg_to_cv2(msg, "bgr8")
+                self._latest_image = bgr
+                self._latest_gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
             except Exception:
                 logger.exception("Image conversion failed")
 
         def _odom_callback(self, msg: Odometry) -> None:
-            self._latest_pose = msg.pose.pose
+            self._latest_odom = msg.pose.pose
+
+        def _compute_single_tag_pose(self) -> tuple[float, float, float] | None:
+            """Run apriltag detection on current frame, return Tag 0 camera pos in world frame."""
+            gray = self._latest_gray
+            if gray is None:
+                return None
+            try:
+                from apriltag import Detector, DetectorOptions
+
+                opt = DetectorOptions(families="tag36h11")
+                det = Detector(options=opt)
+                dets = det.detect(gray)
+                for d in dets:
+                    if d.tag_id == 0:
+                        # pose = T_tag→cam: maps tag frame to camera frame
+                        pose, _, _ = det.detection_pose(
+                            d, camera_params=_CAM_PARAMS, tag_size=_TAG0_SIZE
+                        )
+                        # camera position in tag frame = inverse(pose) origin
+                        R_tc = pose[:3, :3]  # tag → cam rotation
+                        t_tc = pose[:3, 3]  # tag origin in cam frame
+                        cam_in_tag = -R_tc.T @ t_tc  # cam origin in tag frame
+                        # Transform to world frame
+                        cam_in_world = _R_TAG_TO_WORLD @ cam_in_tag
+                        return (
+                            float(cam_in_world[0]),
+                            float(cam_in_world[1]),
+                            float(cam_in_world[2]),
+                        )
+            except Exception:
+                logger.exception("Single-tag detection failed")
+            return None
 
         def _render(self) -> None:
             img = self._latest_image
@@ -75,51 +112,59 @@ def run_visualizer(
                 return
             display = img.copy()
 
-            panel_w, panel_h = 380, 100
+            panel_w, panel_h = 380, 150
             overlay = display.copy()
             cv2.rectangle(overlay, (8, 8), (8 + panel_w, 8 + panel_h), (0, 0, 0), -1)
             display = cv2.addWeighted(overlay, 0.55, display, 0.45, 0)
 
-            if self._latest_pose is not None:
-                p = self._latest_pose.position
-                x, y, z = p.x, p.y, p.z
+            line_y = 36
+            if self._latest_odom is not None:
+                p = self._latest_odom.position
                 cv2.putText(
                     display,
-                    "Camera XYZ (world frame)",
-                    (20, 36),
+                    "Multi-tag (odom)",
+                    (20, line_y),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.55,
+                    0.50,
                     (200, 200, 200),
                     1,
                 )
+                line_y += 20
                 cv2.putText(
                     display,
-                    f"X: {x:+.4f} m",
-                    (20, 62),
+                    f"X:{p.x:+.4f} Y:{p.y:+.4f} Z:{p.z:+.4f}",
+                    (20, line_y),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.60,
+                    0.55,
                     (0, 255, 0),
                     2,
                 )
+                line_y += 28
+
+            if self._latest_tag0 is not None:
+                tx, ty, tz = self._latest_tag0
                 cv2.putText(
                     display,
-                    f"Y: {y:+.4f} m",
-                    (20, 82),
+                    "Single-tag (Tag0 PnP)",
+                    (20, line_y),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.60,
-                    (0, 255, 255),
-                    2,
+                    0.50,
+                    (200, 200, 200),
+                    1,
                 )
+                line_y += 20
                 cv2.putText(
                     display,
-                    f"Z: {z:+.4f} m",
-                    (20, 102),
+                    f"X:{tx:+.4f} Y:{ty:+.4f} Z:{tz:+.4f}",
+                    (20, line_y),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.60,
-                    (255, 100, 100),
+                    0.55,
+                    (255, 200, 0),
                     2,
                 )
-            else:
+                line_y += 28
+
+            if self._latest_odom is None and self._latest_tag0 is None:
                 cv2.putText(
                     display,
                     "Waiting for pose...",
@@ -130,14 +175,28 @@ def run_visualizer(
                     2,
                 )
 
+            cv2.putText(
+                display,
+                "SPACE: save both poses",
+                (20, line_y + 4),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.45,
+                (180, 180, 180),
+                1,
+            )
+
             cv2.imshow("TagSLAM Visualizer", display)
             key = cv2.waitKey(1) & 0xFF
             if key == 27 or key == ord("q"):
-                if self._latest_pose is not None:
-                    _save_pose(self._latest_pose, force=True)
                 raise KeyboardInterrupt
-            if key == 32 and self._latest_pose is not None:
-                _save_pose(self._latest_pose, force=True)
+            if key == 32:
+                if self._latest_odom is not None:
+                    p = self._latest_odom.position
+                    _save_line(_log_multi, "multi", p.x, p.y, p.z)
+                single = self._compute_single_tag_pose()
+                if single is not None:
+                    self._latest_tag0 = single
+                    _save_line(_log_single, "single", single[0], single[1], single[2])
 
         def destroy_node(self) -> None:
             cv2.destroyAllWindows()
@@ -157,5 +216,5 @@ def run_visualizer(
             rclpy.shutdown()
         except Exception:
             pass
-        _log_file.close()
-        logger.info("Pose log saved to: %s", pose_log)
+        _log_multi.close()
+        _log_single.close()

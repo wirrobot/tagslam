@@ -1,4 +1,4 @@
-"""Pose analysis command — compute distances from log file."""
+"""Pose analysis command — compute distances from log files."""
 
 from __future__ import annotations
 
@@ -17,45 +17,36 @@ analysis_app = typer.Typer(help="Pose log analysis")
 
 @analysis_app.command()
 def distances(
-    filepath: Annotated[
+    multi: Annotated[
         str,
-        typer.Option("-f", "--file", help="Path to pose_log.txt"),
-    ] = "pose_log.txt",
+        typer.Option("-m", "--multi", help="Multi-tag pose log file"),
+    ] = "pose_log_multi.txt",
+    single: Annotated[
+        str,
+        typer.Option("-s", "--single", help="Single-tag pose log file"),
+    ] = "pose_log_single.txt",
 ) -> None:
-    """Compute Euclidean distances between consecutive poses in a log file."""
+    """Compute distances for multi-tag and single-tag pose logs side by side."""
     heading("Analyze — pose distances")
     section()
 
-    result = analyze_pose_log(filepath)
-    if result is None:
-        console.print("  Need at least 2 entries to compute distances.", style="warn")
+    for label, filepath in [("Multi-tag (odom)", multi), ("Single-tag (Tag0 PnP)", single)]:
+        console.print(f"  {label}", style="heading")
+        console.print(f"  File: {filepath}", style="item")
         section()
-        raise typer.Exit(1)
+        result = analyze_pose_log(filepath)
+        if result is None:
+            console.print("  (no data)", style="warn")
+        else:
+            logger.info(
+                "%s: %d pairs, total=%.4f m, mean=%.4f m",
+                label,
+                result["num_pairs"],
+                result["total"],
+                result["mean"],
+            )
+        section()
 
-    console.print(f"  File    : {result['filepath']}", style="item")
-    console.print(f"  Entries : {result['num_entries']}", style="item")
-    console.print(f"  Pairs   : {result['num_pairs']}", style="item")
-    section()
-
-    console.print(f"  {'Pair':<8} {'Distance (m)':<14} {'Cumulative (m)'}", style="heading")
-    cumulative = 0.0
-    for i, d in enumerate(result["distances"]):
-        cumulative += d
-        console.print(f"  {i + 1:<8} {d:<14.6f} {cumulative:<.6f}", style="item")
-
-    section()
-    console.print(f"  Min   : {result['min']:.6f} m", style="item")
-    console.print(f"  Max   : {result['max']:.6f} m", style="item")
-    console.print(f"  Mean  : {result['mean']:.6f} m", style="item")
-    console.print(f"  Total : {result['total']:.6f} m", style="success")
-    section()
-
-    logger.info(
-        "Pose analysis: %d pairs, total=%.4f m, mean=%.4f m",
-        result["num_pairs"],
-        result["total"],
-        result["mean"],
-    )
     console.print("  Press Enter to exit...", style="dim")
     try:
         input()

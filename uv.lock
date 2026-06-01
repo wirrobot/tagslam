@@ -31,6 +31,12 @@ wheels = [
 ]
 
 [[package]]
+name = "apriltag"
+version = "0.0.16"
+source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/f2/e5/957bb26d575141bc25af7214c14e315c9ebb9a12ccf7c8d09ed40b59bb29/apriltag-0.0.16.tar.gz", hash = "sha256:151e37f5a88bb81726e2bda82938d7e22844131d5894ed9f30eabcd3b8beb071", size = 201239, upload-time = "2018-12-07T11:23:56.893Z" }
+
+[[package]]
 name = "ast-serialize"
 version = "0.5.0"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
@@ -563,6 +569,7 @@ name = "tagslam-tools"
 version = "0.1.0"
 source = { editable = "tools" }
 dependencies = [
+    { name = "apriltag" },
     { name = "numpy" },
     { name = "opencv-python" },
     { name = "pillow" },
@@ -580,6 +587,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "apriltag", specifier = ">=0.0.16" },
     { name = "numpy", specifier = ">=1.26,<2.0" },
     { name = "opencv-python", specifier = ">=4.5" },
     { name = "pillow", specifier = ">=12.2.0" },

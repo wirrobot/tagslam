@@ -12,5 +12,5 @@ tag_corners.txt
 *.log
 *.pdf
 pic/
-pose_log.txt
+pose_log*.txt
 
