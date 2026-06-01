@@ -19,22 +19,52 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 CONFIG_DIR = PROJECT_ROOT / "config"
 TOOLS_DIR = PROJECT_ROOT / "tools"
 
-launch_app = typer.Typer(help="Launch the full TagSLAM pipeline")
+launch_app = typer.Typer(
+    help="Launch the full TagSLAM pipeline",
+    invoke_without_command=True,
+)
 
 
-@launch_app.command()
+@launch_app.callback()
 def launch(
     viz: Annotated[bool, typer.Option("--viz", help="Also start the visualizer window")] = False,
+    device: Annotated[
+        int,
+        typer.Option("--device", help="Camera device ID (e.g. 0 → /dev/video0)"),
+    ] = 0,
 ) -> None:
     """One-click launch: camera publisher + sync_and_detect + tagslam."""
-    _launch_all(viz=viz)
+    _launch_all(viz=viz, device=device)
 
 
-def _launch_all(viz: bool = False) -> None:
+def _kill_stray_camera_publishers() -> None:
+    """Kill any existing camera publisher subprocesses left from previous runs."""
+    import signal
+
+    killed = 0
+    for entry in os.listdir("/proc"):
+        if not entry.isdigit():
+            continue
+        try:
+            cmdline = open(f"/proc/{entry}/cmdline", "rb").read()
+            if b"publish_camera_loop" in cmdline:
+                os.kill(int(entry), signal.SIGTERM)
+                killed += 1
+        except (OSError, ProcessLookupError):
+            continue
+    if killed:
+        logger.info("Cleaned up %d stray camera publisher(s)", killed)
+
+
+def _launch_all(viz: bool = False, device: int = 0) -> None:
     """Core pipeline launcher — reusable from CLI and interactive menu."""
     heading("Launch — full pipeline")
     section()
+
+    _kill_stray_camera_publishers()
+
     console.print(f"  Config : {CONFIG_DIR}", style="item")
+    console.print(f"  Camera : /dev/video{device}", style="item")
     if viz:
         console.print("  Visualizer : enabled", style="item")
     section()
@@ -52,18 +82,18 @@ def _launch_all(viz: bool = False) -> None:
         ),
     }
 
-    logger.info("Starting camera publisher...")
+    logger.info("Starting camera publisher (device=%d)...", device)
     procs.append(
         subprocess.Popen(
             [
                 sys.executable,
                 "-c",
-                "from tagslam_tools.camera import publish_camera_loop; publish_camera_loop()",
+                f"from tagslam_tools.camera import publish_camera_loop; publish_camera_loop(device={device})",
             ],
             env=penv,
         )
     )
-    console.print(f"  {'[1/4] camera publisher':<30} started", style="success")
+    console.print(f"  {'[1/4] camera publisher':<30} started (device={device})", style="success")
 
     logger.info("Starting sync_and_detect...")
     procs.append(

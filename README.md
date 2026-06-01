@@ -119,8 +119,13 @@ uv run run.py launch
 # Run SLAM + live visualizer overlay
 uv run run.py launch --viz
 
+# Specify camera device (e.g. /dev/video5)
+uv run run.py launch --device 5
+uv run run.py launch --viz --device 5
+
 # Direct subcommands
 uv run run.py camera capture     # capture calibration images
+uv run run.py camera capture --device 5
 uv run run.py calibrate calibrate # calibrate from images
 ```
 
@@ -243,6 +248,7 @@ sizes from `config/cameras.yaml` and `config/tagslam.yaml`:
 | `uv run run.py calibrate calibrate` | Calibrate camera from chessboard images |
 | `uv run run.py visualize visualize` | Live SLAM pose overlay on camera feed |
 | `uv run run.py launch --viz` | One-click launch full pipeline |
+| `uv run run.py launch --device N` | Launch with camera `/dev/videoN` (default 0) |
 
 ---
 

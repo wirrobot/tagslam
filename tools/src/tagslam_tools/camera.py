@@ -17,9 +17,9 @@ def create_capture(
     """Open the camera at requested resolution. Returns None on failure."""
     cap = cv2.VideoCapture(device)
     if not cap.isOpened():
-        cap = cv2.VideoCapture(1)
-    if not cap.isOpened():
-        logger.error("Failed to open camera")
+        available = sorted(int(f[5:]) for f in os.listdir("/dev") if f.startswith("video") and f[5:].isdigit())
+        logger.error("Failed to open /dev/video%d", device)
+        logger.error("Available devices: %s", [f"/dev/video{i}" for i in available] if available else "(none)")
         return None
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc(*"MJPG"))  # type: ignore[attr-defined]
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, resolution[0])
@@ -30,7 +30,9 @@ def create_capture(
     return cap
 
 
-def publish_camera_loop(image_topic: str = "camera/image_raw", fps: float = 30.0) -> None:
+def publish_camera_loop(
+    image_topic: str = "camera/image_raw", fps: float = 30.0, device: int = 0
+) -> None:
     """Publish camera frames to a ROS2 topic (requires ROS2 env sourced)."""
     import rclpy
     from cv_bridge import CvBridge
@@ -42,14 +44,18 @@ def publish_camera_loop(image_topic: str = "camera/image_raw", fps: float = 30.0
             super().__init__("camera_publisher")
             self._bridge = CvBridge()
             self._pub = self.create_publisher(Image, image_topic, 10)
-            self._cap = create_capture()
+            self._cap = create_capture(device=device)
             period = 1.0 / fps if fps > 0 else 0.033
             self._timer = self.create_timer(period, self._publish_frame)
 
         def _publish_frame(self) -> None:
             if self._cap is None:
                 return
-            ret, frame = self._cap.read()
+            try:
+                ret, frame = self._cap.read()
+            except cv2.error:
+                logger.warning("Corrupt frame, skipping", extra={"throttle_sec": 3})
+                return
             if not ret:
                 logger.warning("Failed to read frame", extra={"throttle_sec": 3})
                 return
@@ -79,10 +85,10 @@ def publish_camera_loop(image_topic: str = "camera/image_raw", fps: float = 30.0
             pass
 
 
-def interactive_capture(save_dir: str = "pic") -> int:
+def interactive_capture(save_dir: str = "pic", device: int = 0) -> int:
     """Show live preview.  Press SPACE to save frame, ESC/Q to quit."""
     os.makedirs(save_dir, exist_ok=True)
-    cap = create_capture()
+    cap = create_capture(device=device)
     if cap is None:
         return 0
 
