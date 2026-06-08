@@ -83,6 +83,26 @@ def _show_banner() -> None:
 # ── Interactive menu ───────────────────────────────────────────
 
 
+def _capture_with_device() -> None:
+    """Ask for camera device before starting capture."""
+    import os
+
+    available = sorted(
+        int(f[5:]) for f in os.listdir("/dev") if f.startswith("video") and f[5:].isdigit()
+    )
+    device = questionary.select(
+        "Select camera device:",
+        style=questionary_style,
+        choices=[
+            make_choice(str(d), f"/dev/video{d}") for d in available
+        ],
+    ).ask()
+    if device and device.isdigit():
+        interactive_capture("pic", device=int(device))
+    else:
+        interactive_capture("pic")
+
+
 def _interactive_menu() -> None:
     while True:
         action = questionary.select(
@@ -119,7 +139,7 @@ def _interactive_menu() -> None:
         logger.info("Menu selected: %s", action)
         match action:
             case "capture":
-                interactive_capture("pic")
+                _capture_with_device()
             case "publish":
                 publish_camera_loop()
             case "calibrate":

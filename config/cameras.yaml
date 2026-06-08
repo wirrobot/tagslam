@@ -1,10 +1,10 @@
 # ── 摄像头配置文件 ──
 cam0:
   camera_model: pinhole
-  intrinsics: [799.8855, 800.2863, 636.4467, 353.9479]  # fx, fy, cx, cy
+  intrinsics: [2399.6565, 2400.8589, 1909.3401, 1061.8437]  # fx, fy, cx, cy (scaled for 4K)
   distortion_model: radtan                                       # radtan = 5个畸变系数
   distortion_coeffs: [-0.0412, 0.0571, 0.0, 0.0, 0.0]
-  resolution: [1280, 720]
+  resolution: [3840, 2160]
   image_topic: camera/image_raw
   tag_topic: /detector/tags
   rig_body: rig
