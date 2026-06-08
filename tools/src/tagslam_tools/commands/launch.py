@@ -32,9 +32,17 @@ def launch(
         int,
         typer.Option("--device", help="Camera device ID (e.g. 0 → /dev/video0)"),
     ] = 0,
+    width: Annotated[
+        int | None,
+        typer.Option("--width", help="Capture width (default: from config/cameras.yaml)"),
+    ] = None,
+    height: Annotated[
+        int | None,
+        typer.Option("--height", help="Capture height (default: from config/cameras.yaml)"),
+    ] = None,
 ) -> None:
     """One-click launch: camera publisher + sync_and_detect + tagslam."""
-    _launch_all(viz=viz, device=device)
+    _launch_all(viz=viz, device=device, width=width, height=height)
 
 
 def _kill_stray_camera_publishers() -> None:
@@ -56,15 +64,40 @@ def _kill_stray_camera_publishers() -> None:
         logger.info("Cleaned up %d stray camera publisher(s)", killed)
 
 
-def _launch_all(viz: bool = False, device: int = 0) -> None:
+def _read_config_resolution() -> tuple[int, int]:
+    """Return (width, height) from config/cameras.yaml."""
+    try:
+        from yaml import safe_load
+
+        with open(CONFIG_DIR / "cameras.yaml") as f:
+            cfg = safe_load(f)
+        for cam in cfg.values():
+            if isinstance(cam, dict) and "resolution" in cam:
+                w, h = cam["resolution"]
+                return (int(w), int(h))
+    except Exception:
+        logger.debug("Could not read resolution from config")
+    return (1280, 720)
+
+
+def _launch_all(
+    viz: bool = False, device: int = 0, width: int | None = None, height: int | None = None
+) -> None:
     """Core pipeline launcher — reusable from CLI and interactive menu."""
     heading("Launch — full pipeline")
     section()
 
     _kill_stray_camera_publishers()
 
+    res_w, res_h = _read_config_resolution()
+    if width is not None and height is not None:
+        res_w, res_h = width, height
+        resolution_label = f"{res_w}x{res_h} (overridden)"
+    else:
+        resolution_label = f"{res_w}x{res_h}"
+
     console.print(f"  Config : {CONFIG_DIR}", style="item")
-    console.print(f"  Camera : /dev/video{device}", style="item")
+    console.print(f"  Camera : /dev/video{device}  @  {resolution_label}", style="item")
     if viz:
         console.print("  Visualizer : enabled", style="item")
     section()
@@ -82,18 +115,18 @@ def _launch_all(viz: bool = False, device: int = 0) -> None:
         ),
     }
 
-    logger.info("Starting camera publisher (device=%d)...", device)
+    logger.info("Starting camera publisher (device=%d, %dx%d)...", device, res_w, res_h)
+    cam_code = (
+        f"from tagslam_tools.camera import publish_camera_loop; "
+        f"publish_camera_loop(device={device}, width={res_w}, height={res_h})"
+    )
     procs.append(
         subprocess.Popen(
-            [
-                sys.executable,
-                "-c",
-                f"from tagslam_tools.camera import publish_camera_loop; publish_camera_loop(device={device})",
-            ],
+            [sys.executable, "-c", cam_code],
             env=penv,
         )
     )
-    console.print(f"  {'[1/4] camera publisher':<30} started (device={device})", style="success")
+    console.print(f"  {'[1/4] camera publisher':<30} started (device={device}, {res_w}x{res_h})", style="success")
 
     logger.info("Starting sync_and_detect...")
     procs.append(
