@@ -16,7 +16,10 @@ from tagslam_tools.commands.calibrate import calibrate_app
 from tagslam_tools.commands.camera import camera_app
 from tagslam_tools.commands.generate import generate_app
 from tagslam_tools.commands.launch import _launch_all, launch_app
+from tagslam_tools.commands.photo import photo_app
+from tagslam_tools.commands.video import video_app
 from tagslam_tools.commands.visualizer import visualizer_app
+from tagslam_tools.photo import interactive_photo_capture
 from tagslam_tools.pose_analysis import analyze_pose_log
 from tagslam_tools.utils import (
     PALETTE,
@@ -27,6 +30,7 @@ from tagslam_tools.utils import (
     section,
     setup_logging,
 )
+from tagslam_tools.video import interactive_video_record
 from tagslam_tools.visualizer import run_visualizer
 
 logger = logging.getLogger(__name__)
@@ -43,6 +47,8 @@ app.add_typer(analysis_app, name="analyze", help="Pose log analysis")
 app.add_typer(generate_app, name="generate", help="AprilTag marker generation")
 app.add_typer(visualizer_app, name="visualize", help="SLAM visualization")
 app.add_typer(launch_app, name="launch", help="Launch the full pipeline")
+app.add_typer(photo_app, name="photo", help="Point cloud photo capture")
+app.add_typer(video_app, name="video", help="Video recording")
 
 
 @app.callback()
@@ -88,12 +94,17 @@ def _interactive_menu() -> None:
                 make_choice("publish", "Publish camera frames to ROS2 topic"),
                 questionary.Separator("Calibration"),
                 make_choice("calibrate", "Calibrate camera from chessboard images"),
+                questionary.Separator("Point Cloud"),
+                make_choice("photo", "Preview camera, SPACE to save photos to data/point/"),
+                questionary.Separator("Video"),
+                make_choice("video", "Preview camera, SPACE to toggle recording"),
                 questionary.Separator("SLAM"),
                 make_choice("launch --viz", "Start full pipeline with visualizer"),
                 make_choice("launch", "Start full pipeline only"),
                 make_choice("visualize", "Live SLAM pose overlay on camera feed"),
                 questionary.Separator("Analysis"),
                 make_choice("analyze", "Compute distances from pose log file"),
+                make_choice("point-loss", "Point-cloud vs video TagSLAM loss analysis"),
                 questionary.Separator(""),
                 questionary.Choice(
                     title=[(f"fg:{PALETTE['muted']}", "  exit")],
@@ -113,6 +124,10 @@ def _interactive_menu() -> None:
                 publish_camera_loop()
             case "calibrate":
                 calibrate_from_images("pic")
+            case "photo":
+                interactive_photo_capture("data/point")
+            case "video":
+                interactive_video_record("data/video")
             case "launch --viz":
                 _launch_all(viz=True)
             case "launch":
@@ -123,6 +138,16 @@ def _interactive_menu() -> None:
                 analyze_pose_log("pose_log_multi.txt")
                 console.print()
                 analyze_pose_log("pose_log_single.txt")
+                console.print("  Press Enter to exit...", style="dim")
+                try:
+                    input()
+                except (EOFError, KeyboardInterrupt):
+                    pass
+            case "point-loss":
+                from tagslam_tools.point_analysis import run_point_analysis
+
+                run_point_analysis("data/point", "data/video", "data/loss")
+                console.print()
                 console.print("  Press Enter to exit...", style="dim")
                 try:
                     input()
