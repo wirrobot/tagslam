@@ -10,12 +10,52 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Camera intrinsics (from calibration)
-_CAM_PARAMS = [799.8855, 800.2863, 636.4467, 353.9479]
+# Camera intrinsics — read from config/cameras.yaml on first use
+_CAM_PARAMS: list[float] | None = None
 _TAG0_SIZE = 0.1283
+
+
+def _read_camera_params() -> list[float]:
+    """Read camera intrinsics from config/cameras.yaml."""
+    import os
+    from pathlib import Path
+
+    try:
+        from yaml import safe_load
+
+        config_dir = Path(os.environ.get("TAGSLAM_CONFIG_DIR", str(Path(__file__).resolve().parent.parent.parent.parent / "config")))
+        with open(config_dir / "cameras.yaml") as f:
+            cfg = safe_load(f)
+        for cam in cfg.values():
+            if isinstance(cam, dict) and "intrinsics" in cam:
+                return [float(v) for v in cam["intrinsics"]]
+    except Exception:
+        logger.debug("Could not read intrinsics from config, using fallback")
+    return [799.8855, 800.2863, 636.4467, 353.9479]
+
+
+def _get_camera_params() -> list[float]:
+    global _CAM_PARAMS
+    if _CAM_PARAMS is None:
+        _CAM_PARAMS = _read_camera_params()
+    return _CAM_PARAMS
 
 # Rotation: {x:0, y:1.5708, z:0} maps tag-z → world-x, tag-y → world-y, tag-x → world-z
 _R_TAG_TO_WORLD = np.array([[0, 0, 1], [0, 1, 0], [-1, 0, 0]], dtype=np.float64)
+
+
+_MAX_DISPLAY_SIZE = (960, 540)
+
+
+def _resize_display(img: np.ndarray) -> np.ndarray:
+    """Downscale image for display if it exceeds max dimensions."""
+    h, w = img.shape[:2]
+    max_w, max_h = _MAX_DISPLAY_SIZE
+    if w <= max_w and h <= max_h:
+        return img
+    scale = min(max_w / w, max_h / h)
+    new_w, new_h = int(w * scale), int(h * scale)
+    return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
 
 def run_visualizer(
@@ -89,7 +129,7 @@ def run_visualizer(
                     if d.tag_id == 0:
                         # pose = T_tag→cam: maps tag frame to camera frame
                         pose, _, _ = det.detection_pose(
-                            d, camera_params=_CAM_PARAMS, tag_size=_TAG0_SIZE
+                            d, camera_params=_get_camera_params(), tag_size=_TAG0_SIZE
                         )
                         # camera position in tag frame = inverse(pose) origin
                         R_tc = pose[:3, :3]  # tag → cam rotation
@@ -112,80 +152,93 @@ def run_visualizer(
                 return
             display = img.copy()
 
-            panel_w, panel_h = 380, 150
+            h, w = display.shape[:2]
+            scale = max(1.0, min(w / 1280, h / 720))
+
+            panel_w, panel_h = int(380 * scale), int(180 * scale)
             overlay = display.copy()
             cv2.rectangle(overlay, (8, 8), (8 + panel_w, 8 + panel_h), (0, 0, 0), -1)
             display = cv2.addWeighted(overlay, 0.55, display, 0.45, 0)
 
-            line_y = 36
+            line_y = int(36 * scale)
+            cv2.putText(
+                display,
+                f"{w}x{h}",
+                (int(20 * scale), line_y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.45 * scale,
+                (180, 180, 180),
+                int(max(1, scale)),
+            )
+            line_y += int(22 * scale)
             if self._latest_odom is not None:
                 p = self._latest_odom.position
                 cv2.putText(
                     display,
                     "Multi-tag (odom)",
-                    (20, line_y),
+                    (int(20 * scale), line_y),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.50,
+                    0.50 * scale,
                     (200, 200, 200),
-                    1,
+                    int(max(1, scale)),
                 )
-                line_y += 20
+                line_y += int(20 * scale)
                 cv2.putText(
                     display,
                     f"X:{p.x:+.4f} Y:{p.y:+.4f} Z:{p.z:+.4f}",
-                    (20, line_y),
+                    (int(20 * scale), line_y),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.55,
+                    0.55 * scale,
                     (0, 255, 0),
-                    2,
+                    int(max(1, 2 * scale)),
                 )
-                line_y += 28
+                line_y += int(28 * scale)
 
             if self._latest_tag0 is not None:
                 tx, ty, tz = self._latest_tag0
                 cv2.putText(
                     display,
                     "Single-tag (Tag0 PnP)",
-                    (20, line_y),
+                    (int(20 * scale), line_y),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.50,
+                    0.50 * scale,
                     (200, 200, 200),
-                    1,
+                    int(max(1, scale)),
                 )
-                line_y += 20
+                line_y += int(20 * scale)
                 cv2.putText(
                     display,
                     f"X:{tx:+.4f} Y:{ty:+.4f} Z:{tz:+.4f}",
-                    (20, line_y),
+                    (int(20 * scale), line_y),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.55,
+                    0.55 * scale,
                     (255, 200, 0),
-                    2,
+                    int(max(1, 2 * scale)),
                 )
-                line_y += 28
+                line_y += int(28 * scale)
 
             if self._latest_odom is None and self._latest_tag0 is None:
                 cv2.putText(
                     display,
                     "Waiting for pose...",
-                    (20, 55),
+                    (int(20 * scale), int(55 * scale)),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
+                    0.7 * scale,
                     (100, 100, 255),
-                    2,
+                    int(max(1, 2 * scale)),
                 )
 
             cv2.putText(
                 display,
                 "SPACE: save both poses",
-                (20, line_y + 4),
+                (int(20 * scale), line_y + int(4 * scale)),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.45,
+                0.45 * scale,
                 (180, 180, 180),
-                1,
+                int(max(1, scale)),
             )
 
-            cv2.imshow("TagSLAM Visualizer", display)
+            cv2.imshow("TagSLAM Visualizer", _resize_display(display))
             key = cv2.waitKey(1) & 0xFF
             if key == 27 or key == ord("q"):
                 raise KeyboardInterrupt
