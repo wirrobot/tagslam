@@ -8,14 +8,14 @@ import time
 
 import cv2
 
-from tagslam_tools.camera import create_capture
+from tagslam_tools.camera import _resize_display, create_capture
 
 logger = logging.getLogger(__name__)
 
 
-def interactive_photo_capture(save_dir: str = "data/point") -> int:
+def interactive_photo_capture(save_dir: str = "data/point", device: int = 0) -> int:
     os.makedirs(save_dir, exist_ok=True)
-    cap = create_capture()
+    cap = create_capture(device=device)
     if cap is None:
         return 0
 
@@ -43,7 +43,7 @@ def interactive_photo_capture(save_dir: str = "data/point") -> int:
             (0, 255, 0),
             2,
         )
-        cv2.imshow("Point Photo - SPACE to capture", display)
+        cv2.imshow("Point Photo - SPACE to capture", _resize_display(display))
 
         key = cv2.waitKey(1) & 0xFF
         if key == 27 or key == ord("q"):

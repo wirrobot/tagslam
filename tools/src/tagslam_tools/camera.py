@@ -13,7 +13,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 _DEFAULT_RESOLUTION = (1280, 720)
-_MAX_DISPLAY_SIZE = (960, 540)
+_MAX_DISPLAY_SIZE = (480, 270)
 
 
 def _resize_display(img: np.ndarray) -> np.ndarray:

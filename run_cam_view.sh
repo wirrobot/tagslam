@@ -116,7 +116,7 @@ def preview(device: int, width: int | None = None, height: int | None = None) ->
         )
 
         if w > 1920:
-            display_small = cv2.resize(display, (w // 4, h // 4))
+            display_small = cv2.resize(display, (w // 8, h // 8))
             cv2.imshow("Camera Preview", display_small)
         else:
             cv2.imshow("Camera Preview", display)

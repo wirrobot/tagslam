@@ -8,7 +8,7 @@ import time
 
 import cv2
 
-from tagslam_tools.camera import create_capture
+from tagslam_tools.camera import _resize_display, create_capture
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +33,10 @@ def _find_video_writer(
 
 
 def interactive_video_record(
-    save_dir: str = "data/video", fps: float = 30.0
+    save_dir: str = "data/video", fps: float = 30.0, device: int = 0
 ) -> int:
     os.makedirs(save_dir, exist_ok=True)
-    cap = create_capture()
+    cap = create_capture(device=device)
     if cap is None:
         return 0
 
@@ -80,7 +80,7 @@ def interactive_video_record(
             (0, 255, 0),
             2,
         )
-        cv2.imshow("Video Record - SPACE to start/stop", display)
+        cv2.imshow("Video Record - SPACE to start/stop", _resize_display(display))
 
         key = cv2.waitKey(1) & 0xFF
         if key == 27 or key == ord("q"):
@@ -99,18 +99,16 @@ def interactive_video_record(
                 writer = None
                 frame_count = 0
             else:
-                count += 1
-                current_filename = os.path.join(save_dir, f"video_{count:04d}.mp4")
+                current_filename = os.path.join(save_dir, f"video_{count + 1:04d}.mp4")
                 try:
                     writer = _find_video_writer(
                         current_filename, fps, width, height
                     )
                     recording = True
                     frame_count = 0
-                    print(f"[{count}] Recording: {current_filename}")
+                    print(f"[{count + 1}] Recording: {current_filename}")
                 except RuntimeError as e:
                     logger.error("Failed to create video writer: %s", e)
-                    count -= 1
 
     cap.release()
     cv2.destroyAllWindows()

@@ -83,9 +83,12 @@ def _show_banner() -> None:
 # ── Interactive menu ───────────────────────────────────────────
 
 
-def _capture_with_device() -> None:
-    """Ask for camera device before starting capture."""
+def _capture_with_device(func=None, default_dir: str = "pic") -> None:
+    """Ask for camera device before starting capture.\n    \n    Args:\n        func: capture function to call (interactive_capture, interactive_photo_capture, etc.)\n        default_dir: default save directory\n    """
     import os
+
+    if func is None:
+        func = interactive_capture  # type: ignore[assignment]
 
     available = sorted(
         int(f[5:]) for f in os.listdir("/dev") if f.startswith("video") and f[5:].isdigit()
@@ -98,9 +101,9 @@ def _capture_with_device() -> None:
         ],
     ).ask()
     if device and device.isdigit():
-        interactive_capture("pic", device=int(device))
+        func(default_dir, device=int(device))
     else:
-        interactive_capture("pic")
+        func(default_dir)
 
 
 def _interactive_menu() -> None:
@@ -145,9 +148,9 @@ def _interactive_menu() -> None:
             case "calibrate":
                 calibrate_from_images("pic")
             case "photo":
-                interactive_photo_capture("data/point")
+                _capture_with_device(func=interactive_photo_capture, default_dir="data/point")
             case "video":
-                interactive_video_record("data/video")
+                _capture_with_device(func=interactive_video_record, default_dir="data/video")
             case "launch --viz":
                 _launch_all(viz=True)
             case "launch":

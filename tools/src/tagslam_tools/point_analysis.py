@@ -14,22 +14,37 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-_APRILTAG_LOCAL = os.path.expanduser("~/.local/lib/python3.10/site-packages")
-
-
 def _import_apriltag():
+    """Import pupil_apriltags Detector, bypassing ROS2 path conflicts."""
     saved = list(sys.path)
-    sys.path = [
-        p for p in sys.path if "ros" not in p.lower() and "opt/ros" not in p
+    sys.path = [p for p in sys.path if "ros" not in p.lower() and "opt/ros" not in p]
+    extra_paths = [
+        os.path.expanduser("~/.local/lib/python3.10/site-packages"),
+        os.path.expanduser("~/miniconda3/lib/python3.13/site-packages"),
+        os.path.expanduser("~/miniconda3/lib/python3.10/site-packages"),
+        "/usr/lib/python3/dist-packages",
     ]
-    if _APRILTAG_LOCAL not in sys.path:
-        sys.path.insert(0, _APRILTAG_LOCAL)
+    for p in extra_paths:
+        if os.path.isdir(p) and p not in sys.path:
+            sys.path.insert(0, p)
     try:
-        from apriltag import Detector, DetectorOptions  # type: ignore[import-untyped]
+        from pupil_apriltags import Detector  # type: ignore[import-untyped]
 
-        return Detector, DetectorOptions
+        return Detector
     finally:
         sys.path = saved
+
+
+def _make_detector(quad_decimate: float = 2.0):
+    """Create a pupil_apriltags Detector using system libapriltag (3.4.5), not bundled 3.1.0."""
+    Detector = _import_apriltag()
+    system_lib = "/opt/ros/humble/lib/x86_64-linux-gnu"
+    searchpath = (
+        (Path(system_lib),)
+        if os.path.isdir(system_lib)
+        else ()
+    )
+    return Detector(families="tag36h11", quad_decimate=quad_decimate, searchpath=searchpath)
 
 
 def _axis_angle_to_rot(rx: float, ry: float, rz: float) -> np.ndarray:
@@ -109,36 +124,64 @@ def _load_tag_config(config_path: str) -> list[dict]:
     return tags
 
 
+
 def _compute_camera_world_pos(
     image: np.ndarray,
-    fourcc_params: np.ndarray,
+    K: np.ndarray,
+    dist_coeffs: np.ndarray,
     tag_configs: list[dict],
+    detections: list | None = None,
+    detector=None,
 ) -> tuple[float, float, float] | None:
-    Detector, DetectorOptions = _import_apriltag()
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray_full = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    h_full, w_full = gray_full.shape
 
-    opt = DetectorOptions(families="tag36h11")
-    det = Detector(options=opt)
-    detections = det.detect(gray)
+    if detections is not None:
+        dets = detections
+    else:
+        if detector is None:
+            detector = _make_detector()
+        scale = min(1.0, 1920.0 / w_full)
+        if scale < 1.0:
+            gray = cv2.resize(gray_full, (int(w_full * scale), int(h_full * scale)), interpolation=cv2.INTER_AREA)
+        else:
+            gray = gray_full
+        raw_dets = detector.detect(gray)
+        dets = []
+        for d in raw_dets:
+            if scale < 1.0:
+                d.corners[:] /= scale
+                d.center[:] /= scale
+            dets.append(d)
 
-    if not detections:
+    if not dets:
         return None
 
     tag_map = {t["id"]: t for t in tag_configs}
     cam_positions: list[np.ndarray] = []
 
-    for d in detections:
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.01)
+    subpix_win = (5, 5) if w_full > 1920 else (3, 3)
+
+    for d in dets:
         tag_id = d.tag_id
         if tag_id not in tag_map:
             continue
         tcfg = tag_map[tag_id]
-        pose, _, _ = det.detection_pose(
-            d, camera_params=fourcc_params.tolist(), tag_size=tcfg["size"]
+
+        corners = d.corners.astype(np.float32).reshape(4, 2)
+        cv2.cornerSubPix(gray_full, corners, subpix_win, (-1, -1), criteria)
+
+        s = tcfg["size"]
+        obj_pts = np.array(
+            [[-s / 2, -s / 2, 0], [s / 2, -s / 2, 0], [s / 2, s / 2, 0], [-s / 2, s / 2, 0]],
+            dtype=np.float32,
         )
-        if pose is None:
+        ret, rvec, tvec = cv2.solvePnP(obj_pts, corners, K, dist_coeffs, flags=cv2.SOLVEPNP_ITERATIVE)
+        if not ret:
             continue
-        R_tc = pose[:3, :3]
-        t_tc = pose[:3, 3]
+        R_tc, _ = cv2.Rodrigues(rvec)
+        t_tc = tvec.ravel()
         cam_in_tag = -R_tc.T @ t_tc
         cam_in_world = tcfg["R_tag_to_world"] @ cam_in_tag + tcfg["t_tag_world"]
         cam_positions.append(cam_in_world)
@@ -208,12 +251,11 @@ def _point_to_line_dist(
 def _extract_tag_frames(
     video_path: str,
     tag_configs: list[dict],
-    fourcc_params: np.ndarray,
+    K: np.ndarray,
+    dist_coeffs: np.ndarray,
     stride: int = 5,
 ):
-    Detector, DetectorOptions = _import_apriltag()
-    opt = DetectorOptions(families="tag36h11")
-    det = Detector(options=opt)
+    det = _make_detector()
 
     tag_ids = {t["id"] for t in tag_configs}
 
@@ -233,14 +275,28 @@ def _extract_tag_frames(
             break
         timestamp = frame_idx / fps
         if frame_idx % stride == 0:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            dets = det.detect(gray)
-            if any(d.tag_id in tag_ids for d in dets):
-                pos = _compute_camera_world_pos(frame, fourcc_params, tag_configs)
+            gray_full = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            h_full, w_full = gray_full.shape
+            scale = min(1.0, 1920.0 / w_full)
+            if scale < 1.0:
+                gray = cv2.resize(gray_full, (int(w_full * scale), int(h_full * scale)), interpolation=cv2.INTER_AREA)
+            else:
+                gray = gray_full
+            raw_dets = det.detect(gray)
+            if any(d.tag_id in tag_ids for d in raw_dets):
+                for d in raw_dets:
+                    if scale < 1.0:
+                        d.corners[:] /= scale
+                        d.center[:] /= scale
+                pos = _compute_camera_world_pos(frame, K, dist_coeffs, tag_configs, detections=raw_dets)
                 if pos is not None:
                     yield frame_idx, timestamp, pos
         frame_idx += 1
     cap.release()
+    try:
+        det.tag_detector_ptr = None
+    except Exception:
+        pass
 
 
 def run_point_analysis(
@@ -250,11 +306,15 @@ def run_point_analysis(
     camera_config: str = "config/cameras.yaml",
     tagslam_config: str = "config/tagslam.yaml",
 ) -> None:
+    import sys as _sys
+
+    _sys.stdout.reconfigure(line_buffering=True) if hasattr(_sys.stdout, "reconfigure") else None
+
     print("═" * 60)
     print("  Point Cloud → TagSLAM Loss Analysis")
     print("═" * 60)
 
-    K, dist_coeffs, resolution, fourcc_params = _load_camera_params(camera_config)
+    K, dist_coeffs, resolution, _fourcc = _load_camera_params(camera_config)
     print(f"\n  Camera  : {resolution[0]}x{resolution[1]}")
     print(f"  K       : fx={K[0, 0]:.2f} fy={K[1, 1]:.2f} cx={K[0, 2]:.2f} cy={K[1, 2]:.2f}")
 
@@ -284,12 +344,14 @@ def run_point_analysis(
     photo_names: list[str] = []
     photo_total = len(image_files)
 
+    photo_detector = _make_detector()
+
     for i, img_path in enumerate(image_files):
         img = cv2.imread(str(img_path))
         if img is None:
             print(f"  [{i + 1}/{photo_total}] SKIP {img_path.name} (unreadable)")
             continue
-        pos = _compute_camera_world_pos(img, fourcc_params, tag_configs)
+        pos = _compute_camera_world_pos(img, K, dist_coeffs, tag_configs, detector=photo_detector)
         if pos is None:
             print(f"  [{i + 1}/{photo_total}] SKIP {img_path.name} (no tag detected)")
             continue
@@ -329,18 +391,24 @@ def run_point_analysis(
         return
     print(f"  Found {len(video_files)} video(s)")
 
-    results: list[dict] = []
+    os.makedirs(output_dir, exist_ok=True)
+    csv_path = os.path.join(output_dir, "point_loss.csv")
+    fieldnames = ["filename", "timestamp", "x", "y", "z", "distance"]
+    csv_file = open(csv_path, "w", newline="")  # noqa: SIM115
+    writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+    writer.writeheader()
+    csv_file.flush()
+    total_rows = 0
 
     for vi, vpath in enumerate(video_files):
         vname = vpath.name
         print(f"\n  [{vi + 1}/{len(video_files)}] {vname}")
         tag_frames = 0
         for frame_idx, timestamp, pos in _extract_tag_frames(
-            str(vpath), tag_configs, fourcc_params
+            str(vpath), tag_configs, K, dist_coeffs
         ):
-            pt = np.array(pos)
-            dist = _point_to_line_dist(pt, origin, direction)
-            results.append(
+            dist = _point_to_line_dist(np.array(pos), origin, direction)
+            writer.writerow(
                 {
                     "filename": f"{Path(vname).stem}_f{frame_idx:05d}",
                     "timestamp": f"{timestamp:.3f}",
@@ -350,32 +418,40 @@ def run_point_analysis(
                     "distance": f"{dist:.6f}",
                 }
             )
+            csv_file.flush()
+            total_rows += 1
             tag_frames += 1
             if tag_frames % 50 == 0:
                 print(f"    ... {tag_frames} tag frames processed")
         print(f"    Tag frames: {tag_frames}")
 
-    # ── Phase 3: Export CSV ──
-    print("\n── Phase 3: Exporting results ──")
-    os.makedirs(output_dir, exist_ok=True)
-    csv_path = os.path.join(output_dir, "point_loss.csv")
-    fieldnames = ["filename", "timestamp", "x", "y", "z", "distance"]
-    with open(csv_path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(results)
+    csv_file.close()
 
-    print(f"  Exported {len(results)} rows to {csv_path}")
+    # ── Phase 3: Summary ──
+    print(f"\n── Phase 3: Results ──")
+    print(f"  Exported {total_rows} rows to {csv_path}")
+    print(f"  Photo points   : {len(photo_points)}")
+    print(f"  Line inliers   : {n_in}")
+    print(f"  Video frames   : {total_rows}")
 
-    if results:
-        dists = [float(r["distance"]) for r in results]
-        print("\n  Summary:")
-        print(f"    Photo points   : {len(photo_points)}")
-        print(f"    Line inliers   : {n_in}")
-        print(f"    Video frames   : {len(results)}")
-        print(f"    Distance mean  : {np.mean(dists):.6f} m")
-        print(f"    Distance std   : {np.std(dists):.6f} m")
-        print(f"    Distance max   : {np.max(dists):.6f} m")
-        print(f"    Distance min   : {np.min(dists):.6f} m")
+    if total_rows > 0:
+        dists = []
+        with open(csv_path) as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                dists.append(float(row["distance"]))
+        dists_arr = np.array(dists)
+        print(f"  Distance mean  : {np.mean(dists_arr):.6f} m")
+        print(f"  Distance std   : {np.std(dists_arr):.6f} m")
+        print(f"  Distance max   : {np.max(dists_arr):.6f} m")
+        print(f"  Distance min   : {np.min(dists_arr):.6f} m")
 
     print("\n  Done.")
+
+    # Suppress exit-time libapriltag cleanup crash (data already saved)
+    detectors = [d for d in [photo_detector] if d is not None]
+    for d in detectors:
+        try:
+            d.tag_detector_ptr = None
+        except Exception:
+            pass

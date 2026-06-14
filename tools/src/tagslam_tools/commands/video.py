@@ -25,15 +25,20 @@ def record(
         float,
         typer.Option("-f", "--fps", help="Recording frames per second"),
     ] = 30.0,
+    device: Annotated[
+        int,
+        typer.Option("--device", help="Camera device ID (e.g. 0 → /dev/video0)"),
+    ] = 0,
 ) -> None:
     """Open camera preview.  SPACE to start/stop recording, ESC/Q to quit."""
     heading("Video — record")
     section()
+    console.print(f"  Device : /dev/video{device}", style="item")
     console.print(f"  Save dir : {save_dir}", style="item")
     console.print(f"  FPS      : {fps}", style="item")
     section()
-    logger.info("Starting video recording, saving to %s @ %.1f fps", save_dir, fps)
-    count = interactive_video_record(save_dir, fps)
+    logger.info("Starting video recording, saving to %s @ %.1f fps (device=%d)", save_dir, fps, device)
+    count = interactive_video_record(save_dir, fps, device=device)
     section()
     console.print(f"  Recorded {count} videos to {save_dir}/", style="item")
     logger.info("Recorded %d videos", count)

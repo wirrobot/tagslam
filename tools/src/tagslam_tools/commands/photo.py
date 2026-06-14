@@ -21,12 +21,17 @@ def capture(
         str,
         typer.Option("-d", "--dir", help="Directory to save photos"),
     ] = "data/point",
+    device: Annotated[
+        int,
+        typer.Option("--device", help="Camera device ID (e.g. 0 → /dev/video0)"),
+    ] = 0,
 ) -> None:
     """Open camera preview.  SPACE to save photo, ESC/Q to quit."""
     heading("Photo — capture")
     section()
-    logger.info("Starting photo capture, saving to %s", save_dir)
-    count = interactive_photo_capture(save_dir)
+    console.print(f"  Device : /dev/video{device}", style="item")
+    logger.info("Starting photo capture, saving to %s (device=%d)", save_dir, device)
+    count = interactive_photo_capture(save_dir, device=device)
     section()
     console.print(f"  Captured {count} photos to {save_dir}/", style="item")
     logger.info("Captured %d photos", count)

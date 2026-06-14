@@ -34,17 +34,56 @@ def _read_camera_params() -> list[float]:
     return [799.8855, 800.2863, 636.4467, 353.9479]
 
 
+def _read_distortion_coeffs() -> np.ndarray:
+    """Read distortion coefficients from config/cameras.yaml."""
+    import os
+    from pathlib import Path
+
+    try:
+        from yaml import safe_load
+
+        config_dir = Path(os.environ.get("TAGSLAM_CONFIG_DIR", str(Path(__file__).resolve().parent.parent.parent.parent / "config")))
+        with open(config_dir / "cameras.yaml") as f:
+            cfg = safe_load(f)
+        for cam in cfg.values():
+            if isinstance(cam, dict) and "distortion_coeffs" in cam:
+                return np.array([float(v) for v in cam["distortion_coeffs"]], dtype=np.float64)
+    except Exception:
+        logger.debug("Could not read distortion from config, using zeros")
+    return np.zeros(5, dtype=np.float64)
+
+
+_CAM_K: np.ndarray | None = None
+_CAM_DIST: np.ndarray | None = None
+
+
 def _get_camera_params() -> list[float]:
     global _CAM_PARAMS
     if _CAM_PARAMS is None:
         _CAM_PARAMS = _read_camera_params()
     return _CAM_PARAMS
 
+
+def _get_camera_K() -> np.ndarray:
+    global _CAM_K
+    if _CAM_K is None:
+        intr = _get_camera_params()
+        fx, fy, cx, cy = intr
+        _CAM_K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float64)
+    return _CAM_K
+
+
+def _get_camera_dist() -> np.ndarray:
+    global _CAM_DIST
+    if _CAM_DIST is None:
+        _CAM_DIST = _read_distortion_coeffs()
+    return _CAM_DIST
+
 # Rotation: {x:0, y:1.5708, z:0} maps tag-z → world-x, tag-y → world-y, tag-x → world-z
 _R_TAG_TO_WORLD = np.array([[0, 0, 1], [0, 1, 0], [-1, 0, 0]], dtype=np.float64)
 
 
-_MAX_DISPLAY_SIZE = (960, 540)
+_MAX_DISPLAY_SIZE = (480, 270)
 
 
 def _resize_display(img: np.ndarray) -> np.ndarray:
@@ -120,22 +159,48 @@ def run_visualizer(
             if gray is None:
                 return None
             try:
-                from apriltag import Detector, DetectorOptions
+                import os as _os
+                import sys as _sys
 
-                opt = DetectorOptions(families="tag36h11")
-                det = Detector(options=opt)
-                dets = det.detect(gray)
-                for d in dets:
+                _saved = list(_sys.path)
+                _sys.path = [p for p in _sys.path if "ros" not in p.lower() and "opt/ros" not in p]
+                for _p in [
+                    _os.path.expanduser("~/miniconda3/lib/python3.13/site-packages"),
+                    _os.path.expanduser("~/miniconda3/lib/python3.10/site-packages"),
+                    "/usr/lib/python3/dist-packages",
+                ]:
+                    if _os.path.isdir(_p) and _p not in _sys.path:
+                        _sys.path.insert(0, _p)
+                try:
+                    from pupil_apriltags import Detector
+
+                    det = Detector(
+                        families="tag36h11",
+                        quad_decimate=2.0,
+                        searchpath=(Path("/opt/ros/humble/lib/x86_64-linux-gnu"),),
+                    )
+                finally:
+                    _sys.path = _saved
+                detections = det.detect(gray)
+                for d in detections:
                     if d.tag_id == 0:
-                        # pose = T_tag→cam: maps tag frame to camera frame
-                        pose, _, _ = det.detection_pose(
-                            d, camera_params=_get_camera_params(), tag_size=_TAG0_SIZE
+                        corners = d.corners.astype(np.float32).reshape(4, 2)
+                        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.01)
+                        cv2.cornerSubPix(gray, corners, (3, 3), (-1, -1), criteria)
+
+                        s = _TAG0_SIZE
+                        obj_pts = np.array(
+                            [[-s / 2, -s / 2, 0], [s / 2, -s / 2, 0], [s / 2, s / 2, 0], [-s / 2, s / 2, 0]],
+                            dtype=np.float32,
                         )
-                        # camera position in tag frame = inverse(pose) origin
-                        R_tc = pose[:3, :3]  # tag → cam rotation
-                        t_tc = pose[:3, 3]  # tag origin in cam frame
-                        cam_in_tag = -R_tc.T @ t_tc  # cam origin in tag frame
-                        # Transform to world frame
+                        ret, rvec, tvec = cv2.solvePnP(
+                            obj_pts, corners, _get_camera_K(), _get_camera_dist(), flags=cv2.SOLVEPNP_ITERATIVE
+                        )
+                        if not ret:
+                            continue
+                        R_tc, _ = cv2.Rodrigues(rvec)
+                        t_tc = tvec.ravel()
+                        cam_in_tag = -R_tc.T @ t_tc
                         cam_in_world = _R_TAG_TO_WORLD @ cam_in_tag
                         return (
                             float(cam_in_world[0]),
